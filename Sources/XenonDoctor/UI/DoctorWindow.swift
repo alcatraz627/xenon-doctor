@@ -7,9 +7,9 @@ final class DoctorWindow {
     enum Tab: Int { case status = 0, tester = 1, guide = 2 }
 
     private var window: NSWindow?
-    private var tabs: NSTabView?
+    fileprivate var tabs: NSTabView?
     private let status = StatusPane()
-    private let tester = TesterPane()
+    fileprivate let tester = TesterPane()
 
     /// Called with the repair a Status-tab button asks for; the menu controller runs it.
     var onRepair: ((RepairKind) -> Void)? {
@@ -22,6 +22,12 @@ final class DoctorWindow {
     }
 
     var isVisible: Bool { window?.isVisible ?? false }
+
+    func resize(to size: NSSize) {
+        guard let w = window else { return }
+        w.setContentSize(size)
+        GuideWindow.center(w)
+    }
 
     func update(_ snap: ChainSnapshot?, busy: RepairKind?) {
         status.update(snap, busy: busy)
@@ -39,9 +45,20 @@ final class DoctorWindow {
         Trace.log("ordered front; visible=\(window?.isVisible ?? false) frame=\(window?.frame ?? .zero) selected=\(tabs?.selectedTabViewItem?.label ?? "none")")
     }
 
+    /// Cycles tabs from the keyboard: Ctrl-Tab forward, Ctrl-Shift-Tab back.
+    func step(_ delta: Int) {
+        guard let tv = tabs else { return }
+        let n = tv.numberOfTabViewItems
+        let cur = tv.indexOfTabViewItem(tv.selectedTabViewItem ?? tv.tabViewItem(at: 0))
+        let next = ((cur + delta) % n + n) % n
+        tv.selectTabViewItem(at: next)
+        if next == Tab.tester.rawValue { tester.start() }
+    }
+
     private func build() {
-        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 640),
-                         styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false)
+        let w = DoctorPanel(contentRect: NSRect(x: 0, y: 0, width: 640, height: 640),
+                            styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false)
+        w.owner = self
         w.title = "Xenon Doctor"
         w.isReleasedWhenClosed = false
         w.minSize = NSSize(width: 560, height: 480)
@@ -67,6 +84,34 @@ final class DoctorWindow {
         w.contentView = tv
         tabs = tv
         window = w
+    }
+}
+
+/// The window itself, so the usual keys work without a main menu: a menu bar app has
+/// no Close item, so Cmd-W would otherwise do nothing.
+final class DoctorPanel: NSWindow {
+    weak var owner: DoctorWindow?
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let key = event.charactersIgnoringModifiers ?? ""
+        if flags == .command && key == "w" {
+            performClose(nil)
+            return true
+        }
+        // Ctrl-Tab arrives as a tab character (0x09) or, with Shift, as a back-tab (0x19).
+        let isTab = event.keyCode == 48
+        if isTab && flags.contains(.control) {
+            owner?.step(flags.contains(.shift) ? -1 : 1)
+            return true
+        }
+        if flags == .command, let n = Int(key), (1...3).contains(n) {
+            owner?.step(0)  // keeps the tester timer honest if the index lands there
+            owner?.tabs?.selectTabViewItem(at: n - 1)
+            if n == 2 { owner?.tester.start() }
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
     }
 }
 
@@ -98,6 +143,7 @@ final class StatusPane {
             ])
             scroll.documentView = doc
             scroll.hasVerticalScroller = true
+            scroll.autohidesScrollers = true  // the rows fit; the bar only appears if they ever do not
             scroll.drawsBackground = false
             NSLayoutConstraint.activate([
                 doc.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
@@ -126,8 +172,10 @@ final class StatusPane {
     }
 
     func update(_ snap: ChainSnapshot?, busy: RepairKind?) {
+        Trace.log("status update: built=\(built) snap=\(snap != nil)")
         guard built else { return }
         for v in stack.arrangedSubviews { stack.removeArrangedSubview(v); v.removeFromSuperview() }
+        Trace.log("status update: cleared")
 
         // Header: the same glyph as the menu bar, the app name, the one state word.
         let sev = snap?.severity ?? .fine
@@ -145,9 +193,11 @@ final class StatusPane {
         header.spacing = 12
         stack.addArrangedSubview(header)
         stack.setCustomSpacing(18, after: header)
+        Trace.log("status update: header added")
 
         guard let snap = snap else { return }
         for s in snap.links {
+            Trace.log("status update: row \(s.link)")
             let dot = NSImageView(image: StatusItemController.dot(s.dotColor, size: 14))
             let title = label(s.link.title, weight: .semibold)
             let detail = label(s.detail, color: .secondaryLabelColor)
@@ -204,6 +254,9 @@ final class StatusPane {
         let footer = row([foot, check], spacing: 12)
         stack.setCustomSpacing(10, after: stack.arrangedSubviews.last!)
         stack.addArrangedSubview(footer)
+        DispatchQueue.main.async { [self] in
+            Trace.log("status pane: rows=\(stack.arrangedSubviews.count) scroll=\(scroll.frame) doc=\(scroll.documentView?.frame ?? .zero) stack=\(stack.frame) inWindow=\(scroll.window != nil) hidden=\(scroll.isHiddenOrHasHiddenAncestor)")
+        }
     }
 
     @objc private func tap(_ sender: NSButton) {

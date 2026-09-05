@@ -8,12 +8,24 @@ import GameController
 /// keeps hitting. The pad has other modes that show up as a different kind of controller;
 /// that is caught here too, with the two buttons that put it back.
 struct PadProbe: Probe {
+    let link = Link.pad
     static let pairingHint = "Hold Share and PS together until the light bar blinks fast, then let go."
     static let pairingBrief = "Hold Share + PS until it blinks fast"
 
     struct Seen {
         let pad: KnownPad
         let connected: Bool
+        let name: String
+        let rssi: Int
+    }
+
+    /// The last Bluetooth reading, for surfaces on the main thread (the tester's device
+    /// card) that must never call IOBluetooth themselves: it can block for good.
+    private static var latestLock = NSLock()
+    private static var latestSeen: [Seen] = []
+    static var latest: [Seen] {
+        latestLock.lock(); defer { latestLock.unlock() }
+        return latestSeen
     }
 
     func pairedKnownPads() -> [Seen] {
@@ -22,8 +34,12 @@ struct PadProbe: Probe {
         for d in devices {
             guard let addr = d.addressString, let pad = Pads.pad(forMAC: addr) else { continue }
             if out.contains(where: { $0.pad.mark == pad.mark }) { continue }
-            out.append(Seen(pad: pad, connected: d.isConnected()))
+            let connected = d.isConnected()
+            out.append(Seen(pad: pad, connected: connected, name: d.name ?? "", rssi: connected ? Int(d.rawRSSI()) : 127))
         }
+        PadProbe.latestLock.lock()
+        PadProbe.latestSeen = out
+        PadProbe.latestLock.unlock()
         return out
     }
 

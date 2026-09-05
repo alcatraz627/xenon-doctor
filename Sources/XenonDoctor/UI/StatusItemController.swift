@@ -275,6 +275,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         }
     }
 
+    func resizeWindow(to size: NSSize) { doctor.resize(to: size) }
+
     func open(_ which: String) {
         switch which {
         case "guide": doctor.show(.guide)

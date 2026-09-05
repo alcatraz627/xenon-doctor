@@ -11,7 +11,7 @@
 <p align="center">
   <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%2014%2B-black">
   <img alt="Swift" src="https://img.shields.io/badge/Swift-5-F05138">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.3.1-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.3.2-blue">
   <img alt="Build" src="https://img.shields.io/badge/build-Command%20Line%20Tools%2C%20no%20Xcode-lightgrey">
 </p>
 

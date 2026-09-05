@@ -33,6 +33,7 @@ final class ControllerView: SCNView {
         defaultCameraController.minimumVerticalAngle = -20
         autoenablesDefaultLighting = false
         pointOfView = cameraNode
+        defaultCameraController.target = SCNVector3(0, -1.3, 0)
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
@@ -48,8 +49,8 @@ final class ControllerView: SCNView {
     private func resetCamera() {
         SCNTransaction.begin()
         SCNTransaction.animationDuration = 0.4
-        cameraNode.position = SCNVector3(0, -9, 15)
-        cameraNode.look(at: SCNVector3(0, 0, 0))
+        cameraNode.position = SCNVector3(0, -12, 21)
+        cameraNode.look(at: SCNVector3(0, -1.3, 0))
         SCNTransaction.commit()
     }
 
@@ -209,8 +210,8 @@ final class ControllerView: SCNView {
         cameraNode.camera?.fieldOfView = 42
         cameraNode.camera?.zNear = 1
         cameraNode.camera?.zFar = 200
-        cameraNode.position = SCNVector3(0, -9, 15)
-        cameraNode.look(at: SCNVector3(0, 0, 0))
+        cameraNode.position = SCNVector3(0, -12, 21)
+        cameraNode.look(at: SCNVector3(0, -1.3, 0))
         scene.rootNode.addChildNode(cameraNode)
 
         return scene

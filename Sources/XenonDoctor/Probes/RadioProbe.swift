@@ -13,6 +13,8 @@ func btPowerSet(_ state: Int32)
 /// button can fix from here. Denied permission would make every pad look unpaired, so it
 /// is caught on this row before the pad row can misreport it.
 struct RadioProbe: Probe {
+    let link = Link.radio
+
     static var permissionDenied: Bool {
         switch CBCentralManager.authorization {
         case .denied, .restricted: return true

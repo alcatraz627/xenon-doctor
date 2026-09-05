@@ -129,6 +129,11 @@ default:
     if args.first == "--tester" { delegate.openOnLaunch = "tester" }
     if args.first == "--window" { delegate.openOnLaunch = "status" }
     if args.first == "--menu" { delegate.openOnLaunch = "menu" }
+    // --frame WxH sizes the window on launch, for checking layouts at other sizes.
+    if let i = args.firstIndex(of: "--frame"), i + 1 < args.count {
+        let parts = args[i + 1].split(separator: "x").compactMap { Double($0) }
+        if parts.count == 2 { delegate.frameOnLaunch = NSSize(width: parts[0], height: parts[1]) }
+    }
     app.delegate = delegate
     app.run()
 }

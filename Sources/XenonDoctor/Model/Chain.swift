@@ -161,6 +161,7 @@ struct ChainSnapshot {
 }
 
 protocol Probe {
+    var link: Link { get }
     func read() -> LinkState
 }
 
@@ -178,9 +179,63 @@ struct Chain {
         Chain(probes: [RadioProbe(), PadProbe(), SteamProbe(), GameProbe()])
     }
 
+    /// Probes that are still running from an earlier snapshot. A system call that never
+    /// returns (seen: the Bluetooth power-state query, four threads deep) must not stall
+    /// the rows or spawn a new stuck thread every five seconds.
+    private static var inFlight = Set<Link>()
+    private static var lastGood = [Link: LinkState]()
+    private static let lock = NSLock()
+    static let probeTimeout: TimeInterval = 6
+
     func snapshot() -> ChainSnapshot {
         if ProcessInfo.processInfo.environment["XENON_DEMO"] == "playing" { return Chain.demoPlaying }
-        return ChainSnapshot(links: probes.map { $0.read() }, takenAt: Date())
+        let group = DispatchGroup()
+        var fresh = [Link: LinkState]()
+        for p in probes {
+            Chain.lock.lock()
+            let busy = Chain.inFlight.contains(p.link)
+            if !busy { Chain.inFlight.insert(p.link) }
+            Chain.lock.unlock()
+            if busy { continue }
+            group.enter()
+            DispatchQueue.global(qos: .userInitiated).async {
+                let s = p.read()
+                Chain.lock.lock()
+                fresh[s.link] = s
+                Chain.lastGood[s.link] = s
+                Chain.inFlight.remove(s.link)
+                Chain.lock.unlock()
+                group.leave()
+            }
+        }
+        _ = group.wait(timeout: .now() + Chain.probeTimeout)
+        Chain.lock.lock()
+        let links = Link.allCases.map { link in
+            fresh[link] ?? Chain.lastGood[link].map { Chain.stale($0) } ?? Chain.notAnswering(link)
+        }
+        Chain.lock.unlock()
+        return ChainSnapshot(links: links, takenAt: Date())
+    }
+
+    /// The row shown while a probe has not come back: what the person can do about it.
+    static func notAnswering(_ link: Link) -> LinkState {
+        switch link {
+        case .radio:
+            return LinkState(.radio, ok: false, detail: "not answering",
+                             hint: "macOS's Bluetooth service is not replying. Turn Bluetooth off and on from the menu bar; if that does not help, restart the Mac.",
+                             brief: "Turn Bluetooth off and on from the menu bar")
+        case .pad:
+            return LinkState(.pad, ok: false, detail: "not answering",
+                             hint: "The Bluetooth device list is not replying. Turn Bluetooth off and on from the menu bar.",
+                             brief: "Turn Bluetooth off and on from the menu bar")
+        default:
+            return LinkState(link, ok: false, detail: "not answering", hint: "The check is taking too long; it retries on its own.", brief: "Retrying")
+        }
+    }
+
+    /// A previous answer carried forward while the current read is still running.
+    static func stale(_ s: LinkState) -> LinkState {
+        LinkState(s.link, ok: s.ok, detail: s.detail + " (last reading)", repair: s.repair, hint: s.hint, brief: s.brief, idle: s.idle)
     }
 
     /// A screenshot aid: the all-green, game-running picture without launching a game.

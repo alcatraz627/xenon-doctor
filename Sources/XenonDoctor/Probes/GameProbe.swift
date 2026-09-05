@@ -5,6 +5,7 @@ import AppKit
 /// game window, which is the state the owner was in when he reached for Stop; that case is
 /// reported with the gentle relaunch as its button.
 struct GameProbe: Probe {
+    let link = Link.game
     static let bundleID = "com.concernedape.stardewvalley"
     static let steamAppID = "413150"
 

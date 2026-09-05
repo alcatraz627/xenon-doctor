@@ -21,7 +21,7 @@ An app update replaces the bundle and leaves the Application Support copy alone,
   "productID" : "0x09CC",
   "pads" : [
     { "mark" : "SQUARE", "mac" : "D0:27:96:F5:49:AD", "note" : "Aakarsh's pad" },
-    { "mark" : "CIRCLE", "mac" : "D0:27:96:D0:11:6D", "note" : "the other pad" }
+    { "mark" : "CIRCLE", "mac" : "D0:27:96:D0:11:6D", "note" : "Anmol's pad" }
   ]
 }
 ```

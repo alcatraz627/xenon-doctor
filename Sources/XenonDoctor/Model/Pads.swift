@@ -29,7 +29,7 @@ struct PadRegistry: Codable, Equatable {
         productID: "0x09CC",
         pads: [
             KnownPad(mark: "SQUARE", mac: "D0:27:96:F5:49:AD", note: "Aakarsh's pad"),
-            KnownPad(mark: "CIRCLE", mac: "D0:27:96:D0:11:6D", note: "the other pad"),
+            KnownPad(mark: "CIRCLE", mac: "D0:27:96:D0:11:6D", note: "Anmol's pad"),
         ]
     )
 

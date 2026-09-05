@@ -25,9 +25,17 @@ The pads themselves come from a small JSON registry, so a third pad is one line 
 
 Three of the buttons do not repair anything themselves. They open the one place where the person has to finish: the Bluetooth privacy list when the app has been denied Bluetooth, Steam's download page when Steam is missing, the game's Steam page when the game is missing. Two states are shown green with a note rather than as breakage: two pads connected at once (the game takes the first), and the game started outside Steam (it plays, but cloud saves want Steam).
 
+## Probes run with a deadline
+
+The four probes run concurrently and the snapshot waits six seconds for them. A probe that has not answered shows its row as "not answering" with what the person can do (turn Bluetooth off and on; restart the Mac), and a probe still running from an earlier cycle is not started again, so a system call that never returns cannot pile up threads. This exists because `IOBluetoothPreferenceGetControllerPowerState` blocked for good inside the app on 2026-09-05 while the same call from the command line answered at once; without the deadline the Status tab stayed empty. The tester's device card reads pad details from the pad probe's last result for the same reason: no IOBluetooth call ever runs on the main thread.
+
 ## The button tester
 
-The Button tester tab is a SceneKit scene (`ControllerView.swift`): the pad's outline extruded into a slab, raised caps and wells for the controls, three lights and a camera. Readings from GameController light the pressed control's material, lean the stick knobs, and fill the triggers; the light bar glows when a pad is connected. Dragging orbits the camera with SceneKit's own control, scrolling zooms, a double click re-centres. The outline's `flatness` is set low because SceneKit polygonises the path at that tolerance and the default turns the grips into octagons.
+The Button tester tab is a SceneKit scene (`ControllerView.swift`): the pad's outline extruded into a slab, raised caps and wells for the controls, three lights and a camera. Readings from GameController light the pressed control's material, lean the stick knobs, and fill the triggers; the light bar glows when a pad is connected. Dragging orbits the camera with SceneKit's own control, scrolling zooms, a double click re-centres. The outline's `flatness` is set low because SceneKit polygonises the path at that tolerance and the default turns the grips into octagons. The scene fills whatever height the tab has; under it, when a pad is connected, a card names the pad (mark and whose it is), its address, what it is paired as, signal, battery, and what macOS calls it, followed by the checklist of controls to try. With no pad, a red line sits on the scene and the checklist says what to press.
+
+## The window's keys
+
+Cmd-W closes the window, Ctrl-Tab and Ctrl-Shift-Tab cycle the tabs, Cmd-1, Cmd-2 and Cmd-3 jump to one. A menu bar app has no main menu, so these are handled by the window itself (`DoctorPanel`). The guide ends with a Docs section linking the repository, README, this document and the releases page, and under that the household's mascot turning slowly, which is an easter egg the owner asked for by name.
 
 ## Battery
 
@@ -78,6 +86,7 @@ XenonDoctor --window          open the window on the Status tab
 XenonDoctor --tester          open the window on the Button tester tab
 XenonDoctor --guide           open the window on the Controller guide tab
 XenonDoctor --menu            pop the menu two seconds after launch, for screenshots
+XenonDoctor --window --frame 1100x900   open at a given size, to check a layout
 ```
 
 Add `--light` or `--dark` after any window flag to force that appearance for the app only. `XENON_DEMO=playing` in the environment makes every row green with the game running, to see the fifth row without launching a game. Set `XENON_TRACE=1` in the environment for one-line notes on stderr about the window (`open -n XenonDoctor.app --env XENON_TRACE=1 --stderr trace.txt --args --window`). Screenshots of the window come from `tools/winshot`, which lists and captures windows by the owner's display name, "Xenon Doctor"; System Events cannot see a menu bar app's windows.
@@ -97,6 +106,6 @@ Sources/XenonDoctor/
   Updater.swift           GitHub release check, download, swap, relaunch
   Trace.swift             XENON_TRACE stderr notes
   SelfTest.swift          --self-test
-Resources/                Info.plist, launch agent plist, pads.json, AppIcon.icns
+Resources/                Info.plist, launch agent plist, pads.json, beanu-boss.png, AppIcon.icns
 tools/                    gcprobe and btctl (standalone probes), makeicon, winshot
 ```

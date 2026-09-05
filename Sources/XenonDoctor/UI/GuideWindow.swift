@@ -24,7 +24,7 @@ enum GuideWindow {
             return .bullet("**\(p.mark)** pencil mark: \(who)Bluetooth address \(p.mac).")
         }
         padLines.append(.bullet("The Mac shows a pad under the name it was given when first paired."))
-        padLines.append(.bullet("A third pad of the same model is added from a terminal: `XenonDoctor --add-pad MARK address`. The list lives in `~/Library/Application Support/XenonDoctor/pads.json`."))
+        padLines.append(.bullet("A third pad of the same model is added from a terminal: **XenonDoctor --add-pad MARK address**. The list lives in Library, Application Support, XenonDoctor, pads.json."))
         return [
         .h1("Stratos Xenon guide"),
         .p("Two pads, one Mac, one game. This page is everything you need when a pad misbehaves."),
@@ -58,6 +58,12 @@ enum GuideWindow {
         .h2("If nothing works"),
         .bullet("Charge the pad with its USB-C cable for half an hour, then try **Share** and **PS** again. A flat pad blinks and never connects."),
         .bullet("Open the **Button tester** tab. If buttons light there, the pad reaches the Mac and the problem is in Steam or the game."),
+
+        .h2("Docs"),
+        .link("Repository", "https://github.com/alcatraz627/xenon-doctor"),
+        .link("README", "https://github.com/alcatraz627/xenon-doctor#readme"),
+        .link("How it works and command modes", "https://github.com/alcatraz627/xenon-doctor/blob/main/docs/how-it-works.md"),
+        .link("Releases", "https://github.com/alcatraz627/xenon-doctor/releases"),
         ]
     }
 
@@ -137,25 +143,87 @@ enum GuideWindow {
         return out
     }
 
-    /// The guide as a scrolling text view, ready to sit in the window's Guide tab.
+    /// The guide as a scrolling page: the text, then the household's spinning mascot
+    /// underneath it (an easter egg the owner asked for by name).
     static func scrollView() -> NSScrollView {
         let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 620, height: 680))
-        let tv = NSTextView(frame: scroll.bounds)
-        tv.isEditable = false
-        tv.isSelectable = true
-        tv.drawsBackground = true
-        tv.backgroundColor = .windowBackgroundColor
-        tv.textContainerInset = NSSize(width: 22, height: 20)
-        tv.textStorage?.setAttributedString(GuideWindow.attributed())
-        tv.autoresizingMask = [.width]
-        tv.isVerticallyResizable = true
-        tv.textContainer?.widthTracksTextView = true
-        scroll.documentView = tv
+        let text = NSTextField(labelWithAttributedString: GuideWindow.attributed())
+        text.lineBreakMode = .byWordWrapping
+        text.maximumNumberOfLines = 0
+        text.isSelectable = true
+        text.allowsEditingTextAttributes = true
+        text.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let mascot = SpinningImageView(named: "beanu-boss", side: 240)
+        let stack = NSStackView(views: [text, mascot])
+        stack.orientation = .vertical
+        stack.alignment = .centerX
+        stack.spacing = 28
+        stack.edgeInsets = NSEdgeInsets(top: 20, left: 22, bottom: 30, right: 22)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        let doc = FlippedView()
+        doc.translatesAutoresizingMaskIntoConstraints = false
+        doc.addSubview(stack)
+        scroll.documentView = doc
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: doc.topAnchor),
+            stack.leadingAnchor.constraint(equalTo: doc.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: doc.trailingAnchor),
+            stack.bottomAnchor.constraint(equalTo: doc.bottomAnchor),
+            text.leadingAnchor.constraint(equalTo: stack.leadingAnchor, constant: 22),
+            text.trailingAnchor.constraint(equalTo: stack.trailingAnchor, constant: -22),
+            doc.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
+        ])
         scroll.hasVerticalScroller = true
+        scroll.autohidesScrollers = true
+        scroll.drawsBackground = false
         scroll.autoresizingMask = [.width, .height]
         return scroll
     }
+}
 
+/// An image that turns slowly and forever. The image sits in its own layer so the
+/// rotation is a Core Animation transform, not a redraw.
+final class SpinningImageView: NSView {
+    private let imageLayer = CALayer()
+    private let side: CGFloat
+
+    init(named name: String, side: CGFloat) {
+        self.side = side
+        super.init(frame: NSRect(x: 0, y: 0, width: side, height: side))
+        wantsLayer = true
+        translatesAutoresizingMaskIntoConstraints = false
+        widthAnchor.constraint(equalToConstant: side).isActive = true
+        heightAnchor.constraint(equalToConstant: side).isActive = true
+        let url = Bundle.main.resourceURL?.appendingPathComponent("\(name).png")
+            ?? URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("Resources/\(name).png")
+        let fallback = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("Resources/\(name).png")
+        let image = NSImage(contentsOf: url) ?? NSImage(contentsOf: fallback)
+        imageLayer.contents = image
+        imageLayer.contentsGravity = .resizeAspect
+        imageLayer.cornerRadius = 18
+        imageLayer.masksToBounds = true
+        layer?.addSublayer(imageLayer)
+    }
+
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override func layout() {
+        super.layout()
+        imageLayer.bounds = CGRect(x: 0, y: 0, width: side, height: side)
+        imageLayer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+        imageLayer.position = CGPoint(x: bounds.midX, y: bounds.midY)
+        if imageLayer.animation(forKey: "spin") == nil {
+            let spin = CABasicAnimation(keyPath: "transform.rotation.z")
+            spin.fromValue = 0
+            spin.toValue = -2 * Double.pi
+            spin.duration = 14
+            spin.repeatCount = .infinity
+            imageLayer.add(spin, forKey: "spin")
+        }
+    }
+}
+
+extension GuideWindow {
     /// Open on the screen under the cursor; NSScreen.main can be an asleep display.
     static func screenUnderCursor() -> NSScreen? {
         NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main

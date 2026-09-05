@@ -25,6 +25,8 @@ enum SteamPaths {
 /// A Steam that is not running is fine only when the next launch will inherit the ignore
 /// list, which means the launch agent must be loaded in this login session now.
 struct SteamProbe: Probe {
+    let link = Link.steam
+
     static func runningSteam() -> NSRunningApplication? {
         NSWorkspace.shared.runningApplications.first { $0.bundleIdentifier == SteamPaths.bundleID }
     }
