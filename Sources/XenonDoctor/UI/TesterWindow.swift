@@ -56,107 +56,6 @@ final class PadReadings {
     }
 }
 
-/// A schematic of the pad. Pressed things fill with color; the sticks show where they are.
-final class ControllerView: NSView {
-    var readings = PadReadings()
-
-    override var isFlipped: Bool { false }
-
-    private func fill(_ path: NSBezierPath, on: Bool, onColor: NSColor = .controlAccentColor) {
-        (on ? onColor : NSColor.quaternaryLabelColor).setFill()
-        path.fill()
-        NSColor.separatorColor.setStroke()
-        path.lineWidth = 1
-        path.stroke()
-    }
-
-    private func label(_ text: String, at p: CGPoint, color: NSColor = .labelColor, size: CGFloat = 11) {
-        let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: size, weight: .semibold), .foregroundColor: color]
-        let s = NSAttributedString(string: text, attributes: attrs)
-        let sz = s.size()
-        s.draw(at: CGPoint(x: p.x - sz.width / 2, y: p.y - sz.height / 2))
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        let r = readings
-        let W = bounds.width, H = bounds.height
-        let dim = r.connected ? 1.0 : 0.35
-
-        // Body
-        let body = NSBezierPath(roundedRect: NSRect(x: W * 0.08, y: H * 0.12, width: W * 0.84, height: H * 0.62), xRadius: 40, yRadius: 40)
-        NSColor.controlBackgroundColor.withAlphaComponent(dim).setFill(); body.fill()
-        NSColor.separatorColor.setStroke(); body.lineWidth = 1.5; body.stroke()
-
-        // Triggers (fill by value) and bumpers
-        for (side, trig, bump) in [("L", r.leftTrigger, "L1"), ("R", r.rightTrigger, "R1")] {
-            let x = side == "L" ? W * 0.14 : W * 0.72
-            let tRect = NSRect(x: x, y: H * 0.80, width: W * 0.14, height: H * 0.14)
-            let t = NSBezierPath(roundedRect: tRect, xRadius: 6, yRadius: 6)
-            fill(t, on: false)
-            let level = NSRect(x: tRect.minX, y: tRect.minY, width: tRect.width, height: tRect.height * CGFloat(trig))
-            NSColor.controlAccentColor.setFill(); NSBezierPath(roundedRect: level, xRadius: 6, yRadius: 6).fill()
-            label("\(side)2 \(Int(trig * 100))%", at: CGPoint(x: tRect.midX, y: tRect.midY), color: trig > 0.5 ? .white : .labelColor)
-            let bRect = NSRect(x: x, y: H * 0.745, width: W * 0.14, height: H * 0.05)
-            fill(NSBezierPath(roundedRect: bRect, xRadius: 4, yRadius: 4), on: r.pressed.contains(bump))
-            label(bump, at: CGPoint(x: bRect.midX, y: bRect.midY), color: r.pressed.contains(bump) ? .white : .labelColor, size: 9)
-        }
-
-        // D-pad
-        let dc = CGPoint(x: W * 0.22, y: H * 0.55)
-        let arm: CGFloat = 26, thick: CGFloat = 20
-        let dpad: [(String, NSRect)] = [
-            ("up", NSRect(x: dc.x - thick / 2, y: dc.y + 4, width: thick, height: arm)),
-            ("down", NSRect(x: dc.x - thick / 2, y: dc.y - 4 - arm, width: thick, height: arm)),
-            ("left", NSRect(x: dc.x - 4 - arm, y: dc.y - thick / 2, width: arm, height: thick)),
-            ("right", NSRect(x: dc.x + 4, y: dc.y - thick / 2, width: arm, height: thick)),
-        ]
-        for (k, rect) in dpad { fill(NSBezierPath(roundedRect: rect, xRadius: 4, yRadius: 4), on: r.pressed.contains(k)) }
-
-        // Face buttons with PlayStation colors
-        let fc = CGPoint(x: W * 0.78, y: H * 0.55)
-        let faces: [(String, CGPoint, String, NSColor)] = [
-            ("triangle", CGPoint(x: fc.x, y: fc.y + 30), "△", .systemGreen),
-            ("cross", CGPoint(x: fc.x, y: fc.y - 30), "✕", .systemBlue),
-            ("square", CGPoint(x: fc.x - 30, y: fc.y), "□", .systemPink),
-            ("circle", CGPoint(x: fc.x + 30, y: fc.y), "○", .systemRed),
-        ]
-        for (k, p, glyph, color) in faces {
-            let on = r.pressed.contains(k)
-            fill(NSBezierPath(ovalIn: NSRect(x: p.x - 13, y: p.y - 13, width: 26, height: 26)), on: on, onColor: color)
-            label(glyph, at: p, color: on ? .white : color, size: 13)
-        }
-
-        // Sticks
-        for (side, pos, key) in [("L", r.leftStick, "L3"), ("R", r.rightStick, "R3")] {
-            let c = CGPoint(x: side == "L" ? W * 0.36 : W * 0.64, y: H * 0.30)
-            let ring = NSBezierPath(ovalIn: NSRect(x: c.x - 26, y: c.y - 26, width: 52, height: 52))
-            fill(ring, on: r.pressed.contains(key))
-            let knob = CGPoint(x: c.x + pos.x * 18, y: c.y + pos.y * 18)
-            NSColor.controlAccentColor.setFill()
-            NSBezierPath(ovalIn: NSRect(x: knob.x - 8, y: knob.y - 8, width: 16, height: 16)).fill()
-            label(key, at: CGPoint(x: c.x, y: c.y - 38), color: .secondaryLabelColor, size: 9)
-        }
-
-        // Share, Options, PS, touchpad
-        let tp = NSRect(x: W * 0.40, y: H * 0.56, width: W * 0.20, height: H * 0.12)
-        fill(NSBezierPath(roundedRect: tp, xRadius: 6, yRadius: 6), on: r.pressed.contains("touchpad"))
-        label("touchpad", at: CGPoint(x: tp.midX, y: tp.midY), color: r.pressed.contains("touchpad") ? .white : .tertiaryLabelColor, size: 9)
-        let share = NSRect(x: W * 0.355, y: H * 0.58, width: 14, height: 22)
-        fill(NSBezierPath(roundedRect: share, xRadius: 4, yRadius: 4), on: r.pressed.contains("share"))
-        label("Share", at: CGPoint(x: share.midX, y: share.minY - 9), color: .secondaryLabelColor, size: 8)
-        let opts = NSRect(x: W * 0.631, y: H * 0.58, width: 14, height: 22)
-        fill(NSBezierPath(roundedRect: opts, xRadius: 4, yRadius: 4), on: r.pressed.contains("options"))
-        label("Options", at: CGPoint(x: opts.midX, y: opts.minY - 9), color: .secondaryLabelColor, size: 8)
-        let psc = CGPoint(x: W * 0.5, y: H * 0.42)
-        fill(NSBezierPath(ovalIn: NSRect(x: psc.x - 11, y: psc.y - 11, width: 22, height: 22)), on: r.pressed.contains("ps"))
-        label("PS", at: psc, color: r.pressed.contains("ps") ? .white : .labelColor, size: 9)
-
-        if !r.connected {
-            label("No controller reaching the Mac", at: CGPoint(x: W / 2, y: H * 0.06), color: .systemRed, size: 12)
-        }
-    }
-}
-
 /// The tester tab: schematic on top, checks and warnings underneath, a reset button.
 /// Polls the pad thirty times a second while the tab is on screen and stops when it is not.
 final class TesterPane: NSView {
@@ -181,6 +80,13 @@ final class TesterPane: NSView {
         reset.frame = NSRect(x: 24, y: 16, width: 110, height: 28)
         reset.autoresizingMask = [.maxXMargin, .maxYMargin]
         addSubview(reset)
+        let tip = NSTextField(labelWithString: "drag to orbit, scroll to zoom, double-click to re-centre")
+        tip.font = NSFont.systemFont(ofSize: 10)
+        tip.textColor = .tertiaryLabelColor
+        tip.alignment = .right
+        tip.frame = NSRect(x: 300, y: 22, width: 316, height: 16)
+        tip.autoresizingMask = [.minXMargin, .maxYMargin]
+        addSubview(tip)
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
@@ -201,7 +107,7 @@ final class TesterPane: NSView {
         } else {
             readings.connected = false
         }
-        view.needsDisplay = true
+        view.apply()
         checks.attributedStringValue = checklist()
     }
 

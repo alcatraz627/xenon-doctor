@@ -50,6 +50,36 @@ enum SelfTest {
         check("pads: colon uppercase", Pads.pad(forMAC: "D0:27:96:F5:49:AD")?.mark == "SQUARE")
         check("pads: dash lowercase", Pads.pad(forMAC: "d0-27-96-d0-11-6d")?.mark == "CIRCLE")
         check("pads: unknown", Pads.pad(forMAC: "00:11:22:33:44:55") == nil)
+        check("pads: ignore value", Pads.sdlIgnoreValue == "0x054c/0x09cc")
+        check("pads: ids", Pads.vendorID == 0x054C && Pads.productID == 0x09CC)
+
+        // Registry file: the bundled JSON and the built-in list agree, and a round trip holds.
+        if let url = Pads.bundledFile, let data = try? Data(contentsOf: url) {
+            check("registry: bundled parses", (try? PadRegistry.decode(data)) == PadRegistry.builtIn)
+        }
+        if let data = try? PadRegistry.builtIn.encoded() {
+            check("registry: round trip", (try? PadRegistry.decode(data)) == PadRegistry.builtIn)
+        }
+
+        // Idle rows fade, broken rows do not; the easter egg needs every row fine and the game up.
+        check("idle: fades", LinkState(.game, ok: true, detail: "not running", idle: true).dotColor.alphaComponent < 1)
+        check("idle: broken never fades", LinkState(.game, ok: false, detail: "x", idle: true).dotColor.alphaComponent == 1)
+        check("playing: demo", Chain.demoPlaying.playing)
+        check("playing: not when game down", !ChainSnapshot(links: [LinkState(.game, ok: true, detail: "not running", idle: true)], takenAt: Date()).playing)
+        check("playing: not when a row is broken", !ChainSnapshot(links: [
+            LinkState(.pad, ok: false, detail: "x", repair: .reconnectPad), LinkState(.game, ok: true, detail: "running"),
+        ], takenAt: Date()).playing)
+
+        // Daily update check lands at 3 PM, today if that is still ahead, else tomorrow.
+        var cal = Calendar.current
+        cal.timeZone = .current
+        let morning = cal.date(bySettingHour: 9, minute: 0, second: 0, of: Date())!
+        let evening = cal.date(bySettingHour: 20, minute: 0, second: 0, of: Date())!
+        let fromMorning = Updater.nextDaily(after: morning)
+        let fromEvening = Updater.nextDaily(after: evening)
+        check("daily: 3 PM", cal.component(.hour, from: fromMorning) == 15 && cal.component(.hour, from: fromEvening) == 15)
+        check("daily: same day in the morning", cal.isDate(fromMorning, inSameDayAs: morning))
+        check("daily: next day in the evening", !cal.isDate(fromEvening, inSameDayAs: evening) && fromEvening > evening)
 
         // Chain text: a broken link prints its button.
         let snap = ChainSnapshot(links: [

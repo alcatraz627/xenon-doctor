@@ -14,6 +14,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private var busyKind: RepairKind?
     private let doctor = DoctorWindow()
     let updater = Updater()
+    private var menuOpen = false
 
     override init() {
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -68,7 +69,16 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     // MARK: menu
 
-    func menuWillOpen(_ menu: NSMenu) { refresh() }
+    func menuWillOpen(_ menu: NSMenu) {
+        Trace.log("menuWillOpen items=\(menu.numberOfItems)")
+        menuOpen = true
+        refresh()
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        Trace.log("menuDidClose")
+        menuOpen = false
+    }
 
     static func dot(_ color: NSColor, size: CGFloat = 12) -> NSImage {
         let img = NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
@@ -95,7 +105,23 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         return row
     }
 
+    /// What the menu would show, as one string, so an open menu is left alone unless
+    /// something in it actually changed. Tearing the items down under an open menu
+    /// closes it.
+    private func signature(_ snap: ChainSnapshot?) -> String {
+        var s = "\(busy)/\(busyKind?.rawValue ?? "-")/\(updater.state)"
+        guard let snap = snap else { return s + "/nil" }
+        for l in snap.links { s += "|\(l.detail)/\(l.severity)/\(l.idle)/\(l.repair?.rawValue ?? "-")/\(l.menuHint ?? "-")" }
+        return s + "/\(snap.playing)"
+    }
+
+    private var menuSignature = ""
+
     private func rebuildMenu() {
+        let sig = signature(snapshot)
+        if menuOpen && sig == menuSignature { Trace.log("rebuild skipped, menu open, unchanged"); return }
+        Trace.log("rebuild open=\(menuOpen) changed=\(sig != menuSignature)")
+        menuSignature = sig
         menu.removeAllItems()
         guard let snap = snapshot else {
             let row = NSMenuItem(title: "Xenon Doctor   checking", action: nil, keyEquivalent: "")
@@ -108,7 +134,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         for s in snap.links {
             let row = NSMenuItem(title: "\(s.link.title): \(s.detail)", action: #selector(openStatus), keyEquivalent: "")
             row.target = self
-            row.image = StatusItemController.dot(s.severity.color)
+            row.image = StatusItemController.dot(s.dotColor)
             row.isEnabled = true
             row.toolTip = s.hint
             menu.addItem(row)
@@ -131,6 +157,13 @@ final class StatusItemController: NSObject, NSMenuDelegate {
                 hint.toolTip = s.hint
                 menu.addItem(hint)
             }
+        }
+        if snap.playing {
+            // A custom view, because an item's image cannot change while the menu is up
+            // (that dismisses it); a layer animation inside a view can.
+            let egg = NSMenuItem(title: ChainSnapshot.playingLine, action: nil, keyEquivalent: "")
+            egg.view = BreathingRowView(text: ChainSnapshot.playingLine)
+            menu.addItem(egg)
         }
         menu.addItem(.separator())
         addWindowItem("Open Xenon Doctor", key: "o", symbol: "macwindow", action: #selector(openStatus))
@@ -208,13 +241,51 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     @objc private func checkForUpdates() { updater.check(force: true) }
     @objc private func installUpdate() { updater.installAvailable() }
 
+    /// A menu row with a green dot that breathes and the one line of text beside it.
+    /// Laid out to match the menu's own rows: dot in the image column, text after it.
+    final class BreathingRowView: NSView {
+        private let dot = NSImageView()
+
+        init(text: String) {
+            super.init(frame: NSRect(x: 0, y: 0, width: 300, height: 22))
+            dot.image = StatusItemController.dot(.systemGreen)
+            dot.frame = NSRect(x: 13, y: 5, width: 12, height: 12)
+            dot.wantsLayer = true
+            addSubview(dot)
+            let label = NSTextField(labelWithString: text)
+            label.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
+            label.textColor = .labelColor
+            label.frame = NSRect(x: 33, y: 2, width: 260, height: 18)
+            addSubview(label)
+        }
+
+        required init?(coder: NSCoder) { fatalError("not used") }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard window != nil, dot.layer?.animation(forKey: "breathe") == nil else { return }
+            let breathe = CABasicAnimation(keyPath: "opacity")
+            breathe.fromValue = 1.0
+            breathe.toValue = 0.3
+            breathe.duration = 0.9
+            breathe.autoreverses = true
+            breathe.repeatCount = .infinity
+            breathe.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            dot.layer?.add(breathe, forKey: "breathe")
+        }
+    }
+
     func open(_ which: String) {
         switch which {
         case "guide": doctor.show(.guide)
         case "tester": doctor.show(.tester)
         case "menu":
             // Pops the menu once the first snapshot is in, so it can be screenshotted.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in self?.item.button?.performClick(nil) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                Trace.log("performClick on status item, button=\(self?.item.button != nil)")
+                self?.item.button?.performClick(nil)
+                Trace.log("performClick returned")
+            }
         default: doctor.show(.status)
         }
     }

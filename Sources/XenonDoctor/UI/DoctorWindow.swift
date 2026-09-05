@@ -148,7 +148,7 @@ final class StatusPane {
 
         guard let snap = snap else { return }
         for s in snap.links {
-            let dot = NSImageView(image: StatusItemController.dot(s.severity.color, size: 14))
+            let dot = NSImageView(image: StatusItemController.dot(s.dotColor, size: 14))
             let title = label(s.link.title, weight: .semibold)
             let detail = label(s.detail, color: .secondaryLabelColor)
             let head = row([dot, title, detail])
@@ -178,9 +178,26 @@ final class StatusPane {
             stack.setCustomSpacing(14, after: stack.arrangedSubviews.last!)
         }
 
+        if snap.playing {
+            // The fifth row, only while the game is up: a breathing green dot and the line.
+            let dot = NSImageView(image: StatusItemController.dot(.systemGreen, size: 14))
+            dot.wantsLayer = true
+            let breathe = CABasicAnimation(keyPath: "opacity")
+            breathe.fromValue = 1.0
+            breathe.toValue = 0.3
+            breathe.duration = 0.9
+            breathe.autoreverses = true
+            breathe.repeatCount = .infinity
+            breathe.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            dot.layer?.add(breathe, forKey: "breathe")
+            let egg = row([dot, label(ChainSnapshot.playingLine, weight: .semibold)])
+            stack.addArrangedSubview(egg)
+            stack.setCustomSpacing(14, after: egg)
+        }
+
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
         let when = DateFormatter.localizedString(from: snap.takenAt, dateStyle: .none, timeStyle: .medium)
-        let foot = label("Checked at \(when)  ·  Xenon Doctor \(version)", size: 11, color: .tertiaryLabelColor)
+        let foot = label("Rows read at \(when)  ·  Xenon Doctor \(version)  ·  updates checked daily at 3 PM", size: 11, color: .tertiaryLabelColor)
         let check = NSButton(title: "Check now", target: self, action: #selector(checkNow))
         check.bezelStyle = .rounded
         check.controlSize = .small

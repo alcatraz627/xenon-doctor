@@ -91,19 +91,27 @@ struct LinkState {
     let repair: RepairKind?
     let hint: String?
     let brief: String?
+    /// Fine because nothing is happening (Steam or the game not running). Drawn as a
+    /// faded green so a row that is merely dormant reads differently from one at work.
+    let idle: Bool
 
-    init(_ link: Link, ok: Bool, detail: String, repair: RepairKind? = nil, hint: String? = nil, brief: String? = nil) {
+    init(_ link: Link, ok: Bool, detail: String, repair: RepairKind? = nil, hint: String? = nil, brief: String? = nil, idle: Bool = false) {
         self.link = link
         self.ok = ok
         self.detail = detail
         self.repair = repair
         self.hint = hint
         self.brief = brief
+        self.idle = idle
     }
 
     var severity: Severity {
         if ok { return .fine }
         return repair != nil ? .fixable : .needsYou
+    }
+
+    var dotColor: NSColor {
+        ok && idle ? NSColor.systemGreen.withAlphaComponent(0.4) : severity.color
     }
 
     /// Two or three words for the menu bar when this link is the problem.
@@ -133,6 +141,12 @@ struct ChainSnapshot {
     var allOK: Bool { links.allSatisfy { $0.ok } }
     var worst: LinkState? { links.max { $0.severity < $1.severity }.flatMap { $0.ok ? nil : $0 } }
     var severity: Severity { links.map { $0.severity }.max() ?? .fine }
+
+    /// Every link fine and the game up: the one moment the app has nothing left to say.
+    var playing: Bool {
+        allOK && links.contains { $0.link == .game && $0.detail.hasPrefix("running") }
+    }
+    static let playingLine = "Choppa da Wood (enjoy the game)"
 
     /// One line per link, the shape `--status` prints.
     var text: String {
@@ -165,6 +179,15 @@ struct Chain {
     }
 
     func snapshot() -> ChainSnapshot {
-        ChainSnapshot(links: probes.map { $0.read() }, takenAt: Date())
+        if ProcessInfo.processInfo.environment["XENON_DEMO"] == "playing" { return Chain.demoPlaying }
+        return ChainSnapshot(links: probes.map { $0.read() }, takenAt: Date())
     }
+
+    /// A screenshot aid: the all-green, game-running picture without launching a game.
+    static let demoPlaying = ChainSnapshot(links: [
+        LinkState(.radio, ok: true, detail: "on"),
+        LinkState(.pad, ok: true, detail: "SQUARE connected, battery 85%"),
+        LinkState(.steam, ok: true, detail: "running, leaving the controller to the game"),
+        LinkState(.game, ok: true, detail: "running"),
+    ], takenAt: Date())
 }

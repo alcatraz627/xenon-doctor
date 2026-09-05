@@ -1,0 +1,17 @@
+{
+  "model" : "Cosmic Byte Stratos Xenon (reports as a DualShock 4)",
+  "pads" : [
+    {
+      "mac" : "D0:27:96:F5:49:AD",
+      "mark" : "SQUARE",
+      "note" : "Aakarsh's pad"
+    },
+    {
+      "mac" : "D0:27:96:D0:11:6D",
+      "mark" : "CIRCLE",
+      "note" : "the other pad"
+    }
+  ],
+  "productID" : "0x09CC",
+  "vendorID" : "0x054C"
+}

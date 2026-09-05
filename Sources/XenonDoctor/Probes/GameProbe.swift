@@ -61,6 +61,6 @@ struct GameProbe: Probe {
                              hint: "The button opens the game's page in Steam. Click Install there, wait for the download, then come back.",
                              brief: "Click Install in Steam, then come back")
         }
-        return LinkState(.game, ok: true, detail: "not running")
+        return LinkState(.game, ok: true, detail: "not running", idle: true)
     }
 }

@@ -11,7 +11,7 @@
 <p align="center">
   <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%2014%2B-black">
   <img alt="Swift" src="https://img.shields.io/badge/Swift-5-F05138">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.3.0-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.3.1-blue">
   <img alt="Build" src="https://img.shields.io/badge/build-Command%20Line%20Tools%2C%20no%20Xcode-lightgrey">
 </p>
 
@@ -23,7 +23,7 @@ Two Stratos Xenon pads, two MacBooks, one game. The pads worked some evenings an
 
 Xenon Doctor watches the four links a play session depends on: the Bluetooth radio, the pad, Steam, and the game. Each row in its menu is green, yellow with one button, or red with one sentence saying what to press. Its window has three tabs: the same rows with their full text and buttons, a button tester that draws the pad and ticks off each control, and the guide for this exact pad model. It writes the Steam settings that keep Steam out of the controller's way, because letting Steam handle these pads is what produced the keyboard mapping and the freeze, reads the pad's battery from the pad's own report, and updates itself from this repository's releases.
 
-It is built for one household and two specific pads, on purpose. The pads are identified by pencil mark and Bluetooth address, and nothing in it is generic.
+It is built for one household and one pad model, on purpose. The pads are identified by pencil mark and Bluetooth address in a small registry file, so a third pad of the same model is one line, and nothing in it is generic.
 
 ## Quick Start
 
@@ -61,6 +61,7 @@ Later installs never need the right-click step: the menu's update row downloads 
 | [How it works](docs/how-it-works.md) | the four-link chain, why Steam is kept out, what each repair does, source layout |
 | [Process](docs/process.md) | build and ship, how the diagnosis was done, the clean test before a second Mac, how to resume |
 | [Logging](docs/logging.md) | which Steam and Bluetooth logs hold the truth and the lines that matter |
+| [Pad registry](docs/pads-registry.md) | the JSON file that names the pads, and how to add a third one without a rebuild |
 | [Build plan](.claude/output/20260905-1715-xenon-doctor-change/plan.md) | evidence, parity ledger, directives with checks |
 | [The pin](.claude/output/20260905-1715-xenon-doctor-change/pin.md) | the four Steam keys and the one environment variable, how each was found |
 | [Game runs](.claude/output/20260905-1715-xenon-doctor-change/A1-matrix.md) | every adverse case tried, with the verdict |

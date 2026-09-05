@@ -86,8 +86,35 @@ case "--update":
     while !done { RunLoop.main.run(until: Date().addingTimeInterval(0.1)) }
     exit(code)
 
+case "--pads":
+    print(Pads.describe())
+    exit(0)
+
+case "--add-pad":
+    // XenonDoctor --add-pad MARK MAC ["whose pad"]
+    guard args.count >= 3 else { print("usage: XenonDoctor --add-pad MARK D0:27:96:xx:xx:xx [\"note\"]"); exit(2) }
+    do {
+        try Pads.add(mark: args[1], mac: args[2], note: args.count > 3 ? args[3] : nil)
+        print(Pads.describe())
+        exit(0)
+    } catch {
+        print("could not add: \(error)")
+        exit(1)
+    }
+
+case "--remove-pad":
+    guard args.count >= 2 else { print("usage: XenonDoctor --remove-pad MARK"); exit(2) }
+    do {
+        try Pads.remove(mark: args[1])
+        print(Pads.describe())
+        exit(0)
+    } catch {
+        print("could not remove: \(error)")
+        exit(1)
+    }
+
 case "--help", "-h":
-    print("XenonDoctor [--status | --repair <kind> | --self-test | --check-update | --update [--force] | --window | --guide | --tester]")
+    print("XenonDoctor [--status | --repair <kind> | --self-test | --pads | --add-pad MARK MAC [note] | --remove-pad MARK | --check-update | --update [--force] | --window | --guide | --tester]")
     exit(0)
 
 default:

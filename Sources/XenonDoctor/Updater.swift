@@ -29,16 +29,48 @@ final class Updater {
     }
     var onChange: (() -> Void)?
     private var timer: Timer?
-    private var lastCheck: Date?
+    private static let lastCheckKey = "lastUpdateCheck"
+    static let dailyHour = 15
 
-    func startPolling() {
-        check()
-        timer = Timer.scheduledTimer(withTimeInterval: 6 * 3600, repeats: true) { [weak self] _ in self?.check() }
+    private var lastCheck: Date? {
+        get { UserDefaults.standard.object(forKey: Updater.lastCheckKey) as? Date }
+        set { UserDefaults.standard.set(newValue, forKey: Updater.lastCheckKey) }
     }
 
-    /// Asks GitHub for the latest release. `force` ignores the ten-minute cool-down.
+    /// One check a day, at three in the afternoon. At launch, only when the last check is
+    /// more than a day old, so a relaunch is never a network call.
+    func startPolling() {
+        if let last = lastCheck, Date().timeIntervalSince(last) < 20 * 3600 {
+            state = .upToDate
+        } else {
+            check()
+        }
+        scheduleDaily()
+    }
+
+    static func nextDaily(after now: Date = Date()) -> Date {
+        var cal = Calendar.current
+        cal.timeZone = .current
+        var parts = cal.dateComponents([.year, .month, .day], from: now)
+        parts.hour = dailyHour
+        parts.minute = 0
+        parts.second = 0
+        let today = cal.date(from: parts)!
+        return today > now ? today : cal.date(byAdding: .day, value: 1, to: today)!
+    }
+
+    private func scheduleDaily() {
+        timer?.invalidate()
+        let fire = Updater.nextDaily()
+        let t = Timer(fire: fire, interval: 24 * 3600, repeats: true) { [weak self] _ in self?.check() }
+        t.tolerance = 600
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
+    }
+
+    /// Asks GitHub for the latest release. `force` is the menu's explicit ask and skips
+    /// nothing; the scheduled path is already rate-limited by its timer.
     func check(force: Bool = false, completion: ((State) -> Void)? = nil) {
-        if !force, let last = lastCheck, Date().timeIntervalSince(last) < 600 { completion?(state); return }
         if case .downloading = state { completion?(state); return }
         state = .checking
         lastCheck = Date()

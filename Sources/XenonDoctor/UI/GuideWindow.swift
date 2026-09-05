@@ -17,15 +17,21 @@ enum GuideWindow {
     }
 
     /// `**text**` marks a button name or key phrase, rendered bold in the accent color.
-    private static let blocks: [Block] = [
+    /// The pad list comes from the registry, so an added pad shows up here too.
+    private static var blocks: [Block] {
+        var padLines: [Block] = Pads.known.map { p in
+            let who = p.note.map { "\($0). " } ?? ""
+            return .bullet("**\(p.mark)** pencil mark: \(who)Bluetooth address \(p.mac).")
+        }
+        padLines.append(.bullet("The Mac shows a pad under the name it was given when first paired."))
+        padLines.append(.bullet("A third pad of the same model is added from a terminal: `XenonDoctor --add-pad MARK address`. The list lives in `~/Library/Application Support/XenonDoctor/pads.json`."))
+        return [
         .h1("Stratos Xenon guide"),
         .p("Two pads, one Mac, one game. This page is everything you need when a pad misbehaves."),
         .link("github.com/alcatraz627/xenon-doctor", "https://github.com/alcatraz627/xenon-doctor"),
 
         .h2("Which pad is which"),
-        .bullet("**SQUARE** pencil mark: Aakarsh's pad. Bluetooth address D0:27:96:F5:49:AD."),
-        .bullet("**CIRCLE** pencil mark: the other pad. Bluetooth address D0:27:96:D0:11:6D."),
-        .bullet("The Mac shows a pad under the name it was given when first paired."),
+        ] + padLines + [
 
         .h2("Everyday"),
         .doThis("Turn on: press **PS** once. The light bar blinks, then goes solid within five seconds."),
@@ -52,7 +58,8 @@ enum GuideWindow {
         .h2("If nothing works"),
         .bullet("Charge the pad with its USB-C cable for half an hour, then try **Share** and **PS** again. A flat pad blinks and never connects."),
         .bullet("Open the **Button tester** tab. If buttons light there, the pad reaches the Mac and the problem is in Steam or the game."),
-    ]
+        ]
+    }
 
     static func attributed() -> NSAttributedString {
         let out = NSMutableAttributedString()

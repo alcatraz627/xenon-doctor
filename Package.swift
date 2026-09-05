@@ -23,6 +23,7 @@ let package = Package(
                 .linkedFramework("CoreBluetooth"),
                 .linkedFramework("IOKit"),
                 .linkedFramework("GameController"),
+                .linkedFramework("SceneKit"),
                 .linkedFramework("AppKit"),
             ]
         ),

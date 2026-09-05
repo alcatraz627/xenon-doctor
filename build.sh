@@ -38,6 +38,7 @@ mkdir -p "${APP_DIR}/Contents/Resources"
 cp -f "${BIN_PATH}" "${APP_DIR}/Contents/MacOS/${APP_NAME}"
 cp -f Resources/Info.plist "${APP_DIR}/Contents/Info.plist"
 cp -f Resources/com.xenondoctor.steam-env.plist "${APP_DIR}/Contents/Resources/com.xenondoctor.steam-env.plist"
+cp -f Resources/pads.json "${APP_DIR}/Contents/Resources/pads.json"
 if [[ -f Resources/AppIcon.icns ]]; then
     cp -f Resources/AppIcon.icns "${APP_DIR}/Contents/Resources/AppIcon.icns"
 fi

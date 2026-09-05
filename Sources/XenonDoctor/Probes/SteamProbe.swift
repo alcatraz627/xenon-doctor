@@ -76,7 +76,7 @@ struct SteamProbe: Probe {
                 return LinkState(.steam, ok: false, detail: "not running, and its next start would grab the controller",
                                  repair: .applyPin)
             }
-            return LinkState(.steam, ok: true, detail: "not running (starts with the game)")
+            return LinkState(.steam, ok: true, detail: "not running (starts with the game)", idle: true)
         }
         let pinned = Pin.check().isEmpty
         let hasEnv = SteamProbe.environmentHasIgnoreList(pid: app.processIdentifier)
