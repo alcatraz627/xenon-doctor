@@ -38,3 +38,14 @@ Adverse cases still queued:
 3. Mac sleep and wake with the pad connected.
 4. Pad powered on in the wrong mode.
 5. The four keys survive a Mac reboot.
+
+## CIRCLE pad, clean-test step 11, 19:05 to 19:15
+
+| Check | Result |
+|---|---|
+| Paired by the guide's Share + PS hold | yes, macOS lists it as "Chro Controller", address D0:27:96:D0:11:6D, vendor 0x054C product 0x09CC |
+| App identifies it | `--status` reads "CIRCLE and SQUARE paired", so the MAC table in `Sources/XenonDoctor/Model/Pads.swift` matched the real pad |
+| Steam kept its hands off | `controller_ui.txt` has no line for serial D02796D0116D and no entry after 17:57:56; the ignore list held |
+| Stardew with the pad | owner: "Works good on this system, the circle controller" |
+
+Steps 1 to 8 and 11 pass on this Mac. Step 9 (reboot, the agent-vs-login-item race) is still not run; uptime shows no reboot since the 17:21 freeze.

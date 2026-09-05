@@ -3,7 +3,8 @@ import AppKit
 /// The menu bar item. The glyph is a game controller tinted by the worst link: green all
 /// fine, yellow one click fixes it, red needs a person. When something is wrong a two-word
 /// hint sits next to it. The menu has a title row, then one row per link with a colored
-/// dot, each broken row followed by its single button and, when no button can help, a hint.
+/// dot, each broken row followed by its single button and a one-line hint. The full hints
+/// and the same buttons live in the window, which the menu opens.
 final class StatusItemController: NSObject, NSMenuDelegate {
     private let item: NSStatusItem
     private let menu = NSMenu()
@@ -11,8 +12,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private var timer: Timer?
     private var busy = false
     private var busyKind: RepairKind?
-    private let guide = GuideWindow()
-    private let tester = TesterWindow()
+    private let doctor = DoctorWindow()
+    let updater = Updater()
 
     override init() {
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -20,9 +21,13 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.delegate = self
         menu.autoenablesItems = false
         item.menu = menu
+        doctor.onRepair = { [weak self] kind in self?.run(kind) }
+        doctor.onCheckNow = { [weak self] in self?.refresh() }
+        updater.onChange = { [weak self] in DispatchQueue.main.async { self?.rebuildMenu() } }
         paintGlyph(nil)
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in self?.refresh() }
+        updater.startPolling()
     }
 
     func refresh() {
@@ -33,6 +38,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
                 self?.snapshot = snap
                 self?.paintGlyph(snap)
                 self?.rebuildMenu()
+                self?.doctor.update(snap, busy: self?.busyKind)
             }
         }
     }
@@ -64,10 +70,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) { refresh() }
 
-    private static func dot(_ color: NSColor) -> NSImage {
-        let img = NSImage(size: NSSize(width: 12, height: 12), flipped: false) { rect in
+    static func dot(_ color: NSColor, size: CGFloat = 12) -> NSImage {
+        let img = NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
             color.setFill()
-            NSBezierPath(ovalIn: rect.insetBy(dx: 2, dy: 2)).fill()
+            NSBezierPath(ovalIn: rect.insetBy(dx: size / 6, dy: size / 6)).fill()
             return true
         }
         img.isTemplate = false
@@ -81,8 +87,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             .foregroundColor: NSColor.labelColor,
         ])
         s.append(NSAttributedString(string: "   \(snap.severity.word)", attributes: [
-            .font: NSFont.systemFont(ofSize: 12, weight: .medium),
-            .foregroundColor: snap.severity.color,
+            .font: NSFont.systemFont(ofSize: 12, weight: .semibold),
+            .foregroundColor: snap.severity.textColor,
         ]))
         row.attributedTitle = s
         row.isEnabled = false
@@ -100,9 +106,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.addItem(titleRow(snap))
         menu.addItem(.separator())
         for s in snap.links {
-            let row = NSMenuItem(title: "\(s.link.title): \(s.detail)", action: nil, keyEquivalent: "")
+            let row = NSMenuItem(title: "\(s.link.title): \(s.detail)", action: #selector(openStatus), keyEquivalent: "")
+            row.target = self
             row.image = StatusItemController.dot(s.severity.color)
             row.isEnabled = true
+            row.toolTip = s.hint
             menu.addItem(row)
             if let r = s.repair {
                 let working = busy && busyKind == r
@@ -112,37 +120,78 @@ final class StatusItemController: NSObject, NSMenuDelegate {
                 fix.representedObject = r.rawValue
                 fix.indentationLevel = 1
                 fix.isEnabled = !working
-                fix.image = NSImage(systemSymbolName: working ? "hourglass" : "wrench.and.screwdriver.fill", accessibilityDescription: nil)
+                let symbol = working ? "hourglass" : (r.goesThere ? "arrow.up.right.square" : "wrench.and.screwdriver.fill")
+                fix.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
                 menu.addItem(fix)
             }
-            if let h = s.hint {
+            if let h = s.menuHint {
                 let hint = NSMenuItem(title: h, action: nil, keyEquivalent: "")
                 hint.indentationLevel = 1
                 hint.isEnabled = false
+                hint.toolTip = s.hint
                 menu.addItem(hint)
             }
         }
         menu.addItem(.separator())
-        let guideItem = NSMenuItem(title: "Controller guide", action: #selector(showGuide), keyEquivalent: "g")
-        guideItem.target = self
-        guideItem.isEnabled = true
-        guideItem.image = NSImage(systemSymbolName: "book.fill", accessibilityDescription: nil)
-        menu.addItem(guideItem)
-        let testItem = NSMenuItem(title: "Button tester", action: #selector(showTester), keyEquivalent: "t")
-        testItem.target = self
-        testItem.isEnabled = true
-        testItem.image = NSImage(systemSymbolName: "dot.circle.and.hand.point.up.left.fill", accessibilityDescription: nil)
-        menu.addItem(testItem)
+        addWindowItem("Open Xenon Doctor", key: "o", symbol: "macwindow", action: #selector(openStatus))
+        addWindowItem("Button tester", key: "t", symbol: "dot.circle.and.hand.point.up.left.fill", action: #selector(showTester))
+        addWindowItem("Controller guide", key: "g", symbol: "book.fill", action: #selector(showGuide))
+        menu.addItem(.separator())
+        addUpdateItem()
         let quit = NSMenuItem(title: "Quit Xenon Doctor", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.isEnabled = true
         menu.addItem(quit)
     }
 
+    private func addWindowItem(_ title: String, key: String, symbol: String, action: Selector) {
+        let it = NSMenuItem(title: title, action: action, keyEquivalent: key)
+        it.target = self
+        it.isEnabled = true
+        it.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        menu.addItem(it)
+    }
+
+    /// One row about updates: a newer version with its button, or a plain check.
+    private func addUpdateItem() {
+        switch updater.state {
+        case .available(let v):
+            let it = NSMenuItem(title: "Update to \(v.tag) and relaunch", action: #selector(installUpdate), keyEquivalent: "")
+            it.target = self
+            it.isEnabled = true
+            it.image = NSImage(systemSymbolName: "arrow.down.circle.fill", accessibilityDescription: nil)
+            menu.addItem(it)
+        case .downloading:
+            let it = NSMenuItem(title: "Updating, the app will relaunch", action: nil, keyEquivalent: "")
+            it.isEnabled = false
+            it.image = NSImage(systemSymbolName: "hourglass", accessibilityDescription: nil)
+            menu.addItem(it)
+        case .failed(let why):
+            let it = NSMenuItem(title: "Update failed: \(why)", action: #selector(checkForUpdates), keyEquivalent: "")
+            it.target = self
+            it.isEnabled = true
+            menu.addItem(it)
+        case .idle, .upToDate, .checking:
+            let title = updater.state == .checking ? "Checking for updates" : "Check for updates"
+            let it = NSMenuItem(title: title, action: #selector(checkForUpdates), keyEquivalent: "")
+            it.target = self
+            it.isEnabled = updater.state != .checking
+            menu.addItem(it)
+        }
+    }
+
+    // MARK: actions
+
     @objc private func runRepair(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let kind = RepairKind(rawValue: raw), !busy else { return }
+        guard let raw = sender.representedObject as? String, let kind = RepairKind(rawValue: raw) else { return }
+        run(kind)
+    }
+
+    private func run(_ kind: RepairKind) {
+        guard !busy else { return }
         busy = true
         busyKind = kind
         rebuildMenu()
+        doctor.update(snapshot, busy: kind)
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             _ = Repairs.make(kind).run()
             DispatchQueue.main.async {
@@ -153,11 +202,20 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         }
     }
 
-    @objc private func showGuide() { guide.show() }
-    @objc private func showTester() { tester.show() }
+    @objc private func openStatus() { doctor.show(.status) }
+    @objc private func showGuide() { doctor.show(.guide) }
+    @objc private func showTester() { doctor.show(.tester) }
+    @objc private func checkForUpdates() { updater.check(force: true) }
+    @objc private func installUpdate() { updater.installAvailable() }
 
     func open(_ which: String) {
-        if which == "guide" { guide.show() }
-        if which == "tester" { tester.show() }
+        switch which {
+        case "guide": doctor.show(.guide)
+        case "tester": doctor.show(.tester)
+        case "menu":
+            // Pops the menu once the first snapshot is in, so it can be screenshotted.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in self?.item.button?.performClick(nil) }
+        default: doctor.show(.status)
+        }
     }
 }

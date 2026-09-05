@@ -20,6 +20,8 @@ let package = Package(
             path: "Sources/XenonDoctor",
             linkerSettings: [
                 .linkedFramework("IOBluetooth"),
+                .linkedFramework("CoreBluetooth"),
+                .linkedFramework("IOKit"),
                 .linkedFramework("GameController"),
                 .linkedFramework("AppKit"),
             ]

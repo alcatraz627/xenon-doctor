@@ -35,6 +35,14 @@ enum Pin {
         return missing
     }
 
+    /// Is the ignore list in the login session right now, which is what a Steam started
+    /// from the Dock or as a login item inherits. The plist on disk is not enough: it
+    /// takes effect at the next login, and a bootout leaves the file and drops the value.
+    static func sessionHasIgnoreList() -> Bool {
+        let (status, out) = Shell.run("/bin/launchctl", ["getenv", "SDL_GAMECONTROLLER_IGNORE_DEVICES"])
+        return status == 0 && out.trimmingCharacters(in: .whitespacesAndNewlines) == Pads.sdlIgnoreValue
+    }
+
     enum ApplyError: Error, CustomStringConvertible {
         case steamRunning, noConfig, parse(Error), write(Error)
         var description: String {

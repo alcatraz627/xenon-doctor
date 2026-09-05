@@ -1,9 +1,10 @@
 # Build products
 .build/
-XenonDoctor.app/
+XenonDoctor*.app/
 *.zip
 tools/gcprobe
 tools/btctl
+tools/winshot
 .DS_Store
 
 # Session scratch (Claude Code)

@@ -11,7 +11,7 @@
 <p align="center">
   <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%2014%2B-black">
   <img alt="Swift" src="https://img.shields.io/badge/Swift-5-F05138">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.2.1-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.3.0-blue">
   <img alt="Build" src="https://img.shields.io/badge/build-Command%20Line%20Tools%2C%20no%20Xcode-lightgrey">
 </p>
 
@@ -21,7 +21,7 @@
 
 Two Stratos Xenon pads, two MacBooks, one game. The pads worked some evenings and not others. A pad would blink and drop, or Steam would show it connected while the game saw a keyboard, and every bad evening ended in restarting Bluetooth, Steam, the game, or the Mac. One evening it ended with the power button.
 
-Xenon Doctor watches the four links a play session depends on: the Bluetooth radio, the pad, Steam, and the game. Each row in its menu is green, yellow with one button, or red with one sentence saying what to press. It carries the guide for this exact pad model, a button tester that draws the pad and ticks off each control, and the Steam settings that keep Steam out of the controller's way, because letting Steam handle these pads is what produced the keyboard mapping and the freeze.
+Xenon Doctor watches the four links a play session depends on: the Bluetooth radio, the pad, Steam, and the game. Each row in its menu is green, yellow with one button, or red with one sentence saying what to press. Its window has three tabs: the same rows with their full text and buttons, a button tester that draws the pad and ticks off each control, and the guide for this exact pad model. It writes the Steam settings that keep Steam out of the controller's way, because letting Steam handle these pads is what produced the keyboard mapping and the freeze, reads the pad's battery from the pad's own report, and updates itself from this repository's releases.
 
 It is built for one household and two specific pads, on purpose. The pads are identified by pencil mark and Bluetooth address, and nothing in it is generic.
 
@@ -48,7 +48,11 @@ Command modes, useful from a terminal when the menu is not enough:
 ```bash
 XenonDoctor --status          # the four rows as text
 XenonDoctor --repair K        # powerOnRadio | reconnectPad | restartSteam | relaunchGame | applyPin
+XenonDoctor --check-update    # compare this build with the latest GitHub release
+XenonDoctor --update          # install the latest release over this app and exit
 ```
+
+Later installs never need the right-click step: the menu's update row downloads the new zip, swaps the app in place, and relaunches it.
 
 ## Documentation
 

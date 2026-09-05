@@ -19,12 +19,18 @@ enum SteamPaths {
     }
 }
 
-/// Is Steam running, was it started with the ignore list, and has it kept its hands off
-/// the pad since it started. A Steam that opened the pad is the state that preceded the
-/// freeze, so it is reported as broken even though games may still work.
+/// Is Steam installed, is it running, was it started with the ignore list, and has it
+/// kept its hands off the pad since it started. A Steam that opened the pad is the state
+/// that preceded the freeze, so it is reported as broken even though games may still work.
+/// A Steam that is not running is fine only when the next launch will inherit the ignore
+/// list, which means the launch agent must be loaded in this login session now.
 struct SteamProbe: Probe {
     static func runningSteam() -> NSRunningApplication? {
         NSWorkspace.shared.runningApplications.first { $0.bundleIdentifier == SteamPaths.bundleID }
+    }
+
+    static func installedSteam() -> URL? {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: SteamPaths.bundleID)
     }
 
     /// Environment of another process, read the way `ps -E` does. Only the one key matters.
@@ -60,7 +66,16 @@ struct SteamProbe: Probe {
     }
 
     func read() -> LinkState {
+        guard SteamProbe.installedSteam() != nil else {
+            return LinkState(.steam, ok: false, detail: "not installed", repair: .installSteam,
+                             hint: "The button opens Steam's download page. Install it, sign in once, then come back here.",
+                             brief: "Install Steam, sign in, come back")
+        }
         guard let app = SteamProbe.runningSteam() else {
+            if !Pin.check().isEmpty || !Pin.sessionHasIgnoreList() {
+                return LinkState(.steam, ok: false, detail: "not running, and its next start would grab the controller",
+                                 repair: .applyPin)
+            }
             return LinkState(.steam, ok: true, detail: "not running (starts with the game)")
         }
         let pinned = Pin.check().isEmpty

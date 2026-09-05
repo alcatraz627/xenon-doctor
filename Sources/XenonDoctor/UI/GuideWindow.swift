@@ -3,9 +3,8 @@ import AppKit
 /// The Stratos Xenon guide as formatted text: section headings, short bullets, button
 /// names in bold, and three kinds of callout (do this, careful, why). Every line was
 /// confirmed on the owner's pads or comes from the Cosmic Byte manual; nothing invented.
-final class GuideWindow {
-    private var window: NSWindow?
-
+/// Shown in the Guide tab of the main window; this type only builds the text and the view.
+enum GuideWindow {
     private enum Block {
         case h1(String)
         case h2(String)
@@ -52,7 +51,7 @@ final class GuideWindow {
 
         .h2("If nothing works"),
         .bullet("Charge the pad with its USB-C cable for half an hour, then try **Share** and **PS** again. A flat pad blinks and never connects."),
-        .bullet("Open the **Button tester** from the menu. If buttons light there, the pad reaches the Mac and the problem is in Steam or the game."),
+        .bullet("Open the **Button tester** tab. If buttons light there, the pad reaches the Mac and the problem is in Steam or the game."),
     ]
 
     static func attributed() -> NSAttributedString {
@@ -131,31 +130,23 @@ final class GuideWindow {
         return out
     }
 
-    func show() {
-        if window == nil {
-            let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 620, height: 680))
-            let tv = NSTextView(frame: scroll.bounds)
-            tv.isEditable = false
-            tv.isSelectable = true
-            tv.drawsBackground = true
-            tv.backgroundColor = .windowBackgroundColor
-            tv.textContainerInset = NSSize(width: 22, height: 20)
-            tv.textStorage?.setAttributedString(GuideWindow.attributed())
-            tv.autoresizingMask = [.width]
-            tv.isVerticallyResizable = true
-            tv.textContainer?.widthTracksTextView = true
-            scroll.documentView = tv
-            scroll.hasVerticalScroller = true
-            let w = NSWindow(contentRect: scroll.frame, styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
-            w.title = "Stratos Xenon guide"
-            w.contentView = scroll
-            w.isReleasedWhenClosed = false
-            w.minSize = NSSize(width: 480, height: 400)
-            window = w
-        }
-        GuideWindow.center(window!)
-        NSApp.activate(ignoringOtherApps: true)
-        window?.makeKeyAndOrderFront(nil)
+    /// The guide as a scrolling text view, ready to sit in the window's Guide tab.
+    static func scrollView() -> NSScrollView {
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 620, height: 680))
+        let tv = NSTextView(frame: scroll.bounds)
+        tv.isEditable = false
+        tv.isSelectable = true
+        tv.drawsBackground = true
+        tv.backgroundColor = .windowBackgroundColor
+        tv.textContainerInset = NSSize(width: 22, height: 20)
+        tv.textStorage?.setAttributedString(GuideWindow.attributed())
+        tv.autoresizingMask = [.width]
+        tv.isVerticallyResizable = true
+        tv.textContainer?.widthTracksTextView = true
+        scroll.documentView = tv
+        scroll.hasVerticalScroller = true
+        scroll.autoresizingMask = [.width, .height]
+        return scroll
     }
 
     /// Open on the screen under the cursor; NSScreen.main can be an asleep display.

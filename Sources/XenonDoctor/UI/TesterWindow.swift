@@ -157,53 +157,52 @@ final class ControllerView: NSView {
     }
 }
 
-/// The tester window: schematic on top, checks and warnings underneath, a reset button.
-final class TesterWindow {
-    private var window: NSWindow?
-    private var view: ControllerView?
-    private var checks: NSTextField?
+/// The tester tab: schematic on top, checks and warnings underneath, a reset button.
+/// Polls the pad thirty times a second while the tab is on screen and stops when it is not.
+final class TesterPane: NSView {
+    private let view: ControllerView
+    private let checks: NSTextField
     private var timer: Timer?
     private let readings = PadReadings()
 
-    func show() {
-        if window == nil {
-            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 560),
-                             styleMask: [.titled, .closable], backing: .buffered, defer: false)
-            w.title = "Button tester"
-            let cv = ControllerView(frame: NSRect(x: 20, y: 250, width: 600, height: 290))
-            cv.readings = readings
-            w.contentView?.addSubview(cv)
-            let c = NSTextField(wrappingLabelWithString: "")
-            c.font = NSFont.systemFont(ofSize: 12)
-            c.frame = NSRect(x: 24, y: 48, width: 592, height: 190)
-            w.contentView?.addSubview(c)
-            let reset = NSButton(title: "Start over", target: self, action: #selector(resetChecks))
-            reset.frame = NSRect(x: 24, y: 12, width: 110, height: 28)
-            w.contentView?.addSubview(reset)
-            w.isReleasedWhenClosed = false
-            window = w
-            view = cv
-            checks = c
-        }
+    init() {
+        view = ControllerView(frame: NSRect(x: 20, y: 270, width: 600, height: 290))
+        checks = NSTextField(wrappingLabelWithString: "")
+        super.init(frame: NSRect(x: 0, y: 0, width: 640, height: 580))
+        autoresizingMask = [.width, .height]
+        view.readings = readings
+        view.autoresizingMask = [.width, .minYMargin]
+        addSubview(view)
+        checks.font = NSFont.systemFont(ofSize: 12)
+        checks.frame = NSRect(x: 24, y: 56, width: 592, height: 200)
+        checks.autoresizingMask = [.width, .height]
+        addSubview(checks)
+        let reset = NSButton(title: "Start over", target: self, action: #selector(resetChecks))
+        reset.frame = NSRect(x: 24, y: 16, width: 110, height: 28)
+        reset.autoresizingMask = [.maxXMargin, .maxYMargin]
+        addSubview(reset)
+    }
+
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    func start() {
         GCController.startWirelessControllerDiscovery { }
+        PadBattery.shared.start()
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in self?.tick() }
-        GuideWindow.center(window!)
-        NSApp.activate(ignoringOtherApps: true)
-        window?.makeKeyAndOrderFront(nil)
     }
 
     @objc private func resetChecks() { readings.reset() }
 
     private func tick() {
-        guard let w = window, w.isVisible else { timer?.invalidate(); return }
+        guard window?.isVisible == true, !isHidden, superview != nil else { timer?.invalidate(); return }
         if let c = GCController.controllers().first(where: { $0.extendedGamepad != nil }) {
             readings.update(from: c)
         } else {
             readings.connected = false
         }
-        view?.needsDisplay = true
-        checks?.attributedStringValue = checklist()
+        view.needsDisplay = true
+        checks.attributedStringValue = checklist()
     }
 
     private func checklist() -> NSAttributedString {
@@ -224,7 +223,12 @@ final class TesterWindow {
             return out
         }
         var head = "\(r.name)"
-        if r.battery > 0 { head += ", battery \(Int(r.battery * 100))%" }
+        let raw = PadBattery.shared.latest()
+        if let b = raw {
+            head += b.charging ? ", charging \(b.percent)%" : ", battery \(b.percent)%"
+        } else if r.battery > 0 {
+            head += ", battery \(Int(r.battery * 100))%"
+        }
         out.append(NSAttributedString(string: head + "\n", attributes: [.foregroundColor: NSColor.secondaryLabelColor, .font: NSFont.systemFont(ofSize: 11)]))
         let faces: Set<String> = ["cross", "circle", "square", "triangle"]
         let dpad: Set<String> = ["up", "down", "left", "right"]
@@ -237,13 +241,13 @@ final class TesterWindow {
         row(r.seen.contains("share") && r.seen.contains("options"), "Press Share and Options")
         row(r.seen.contains("ps"), "Tap PS once (the game may pause)")
         row(r.seen.contains("touchpad"), "Click the touchpad")
-        if r.battery <= 0 { row(false, "Battery: this pad gives no reading over Bluetooth; charge it when the light bar blinks orange") }
+        if raw == nil && r.battery <= 0 { row(false, "Battery: no reading yet; it appears a few seconds after the pad connects") }
         if r.leftRestMin > 0.08 { row(nil, String(format: "Left stick never rests at centre, drift %.0f%%", r.leftRestMin * 100)) }
         if r.rightRestMin > 0.08 { row(nil, String(format: "Right stick never rests at centre, drift %.0f%%", r.rightRestMin * 100)) }
         if r.leftTriggerMax > 0.3 && r.leftTriggerMax < 0.95 { row(nil, String(format: "L2 only reaches %.0f%%", r.leftTriggerMax * 100)) }
         if r.rightTriggerMax > 0.3 && r.rightTriggerMax < 0.95 { row(nil, String(format: "R2 only reaches %.0f%%", r.rightTriggerMax * 100)) }
-        // This pad reports zero when it has no battery reading, so only a real low value warns.
-        if r.battery > 0 && r.battery < 0.2 { row(nil, "Battery low, charge the pad") }
+        let percent = raw?.percent ?? (r.battery > 0 ? Int(r.battery * 100) : 100)
+        if percent < 20 && raw?.charging != true { row(nil, "Battery low, charge the pad") }
         return out
     }
 }

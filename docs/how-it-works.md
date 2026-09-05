@@ -12,12 +12,18 @@ Xenon Doctor is a macOS menu bar app for two Cosmic Byte Stratos Xenon gamepads,
 
 | Link | What "fine" means | What the app checks |
 |---|---|---|
-| Bluetooth | radio on | `IOBluetoothPreferenceGetControllerPowerState` |
-| Controller | a known pad connected and readable by macOS | paired devices by Bluetooth address, `GCController` list, battery |
-| Steam | running with the ignore list, pin in place, has not opened the pad | Steam's process environment, four keys in `localconfig.vdf`, `controller_ui.txt` since Steam started |
-| Stardew Valley | running, or cleanly not running | the game process, and Steam's `gameprocess_log.txt` for a game Steam still lists as running |
+| Bluetooth | radio on, and this app allowed to use it | `IOBluetoothPreferenceGetControllerPowerState`, `CBCentralManager.authorization` |
+| Controller | a known pad connected and seen by macOS as a DualShock | paired devices by Bluetooth address, `GCController` list and its product category, battery from the pad's own HID report |
+| Steam | installed; running with the ignore list, pin in place, has not opened the pad; or not running with the agent loaded so its next start inherits the list | `NSWorkspace`, Steam's process environment, four keys in `localconfig.vdf`, `launchctl getenv`, `controller_ui.txt` since Steam started |
+| Stardew Valley | installed; running, or cleanly not running | `appmanifest_413150.acf` in each Steam library, the game process, Steam's `gameprocess_log.txt` for a game Steam still lists as running |
 
-Each row is green (fine), yellow (one button fixes it), or red (a person has to act, and the row says what to press).
+Each row is green (fine), yellow (one button fixes it), or red (a person has to act, and the row says what to press). The menu shows a one-line hint under a broken row; the window's Status tab shows the full sentence.
+
+Three of the buttons do not repair anything themselves. They open the one place where the person has to finish: the Bluetooth privacy list when the app has been denied Bluetooth, Steam's download page when Steam is missing, the game's Steam page when the game is missing. Two states are shown green with a note rather than as breakage: two pads connected at once (the game takes the first), and the game started outside Steam (it plays, but cloud saves want Steam).
+
+## Battery
+
+macOS's GameController layer reports zero for this pad, so the app reads the pad's own input report over HID (`PadBattery.swift`). A DualShock 4 over Bluetooth sends a short report until something asks it for a feature report, then switches to the full report `0x11`, whose byte 32 holds the charge in tenths and a cable flag. The app asks once when the pad appears and reads the byte from every report after. Nothing is written to the pad, and the device is opened shared, so the game is not disturbed.
 
 ## Why Steam is kept out
 
@@ -45,16 +51,26 @@ A launch agent, `com.xenondoctor.steam-env`, puts that variable into the login s
 
 After a crash or forced restart the Mac loses the pad's Bluetooth service record. The pad only serves that record while in pairing mode. A PS press then connects for two seconds and drops. The fix is to hold Share and PS until the light bar blinks fast. The app shows that line whenever a pad is paired but not connected.
 
+## Updates
+
+The app polls `https://api.github.com/repos/alcatraz627/xenon-doctor/releases/latest` at launch and every six hours. When the tag is newer than the running version (numeric compare, so 0.10 beats 0.9), the menu grows a row, "Update to vX and relaunch". That row downloads the release zip, unpacks it with `ditto`, moves the running bundle aside into the temp folder, moves the new one into its place, and starts it with `open -n` before quitting. A file the app downloads itself carries no quarantine flag, so the new copy opens with no right-click step. The swap is exercised from the terminal with `--update --force`, which reinstalls the current release over a copy of the app.
+
 ## Command modes
 
 ```
-XenonDoctor --status      the four rows as text, exit 1 when any is not fine
-XenonDoctor --repair K    one repair: powerOnRadio reconnectPad restartSteam relaunchGame applyPin
-XenonDoctor --self-test   parser round trip, pad lookup, classifier; exit 0 on pass
-XenonDoctor --unpin       test reset: remove the four keys and the launch agent
-XenonDoctor --guide       open the guide window on launch
-XenonDoctor --tester      open the button tester on launch
+XenonDoctor --status          the four rows as text, exit 1 when any is not fine
+XenonDoctor --repair K        one repair: powerOnRadio reconnectPad restartSteam relaunchGame applyPin
+XenonDoctor --self-test       parser round trip, pad lookup, classifier, menu hints, version compare; exit 0 on pass
+XenonDoctor --unpin           test reset: remove the four keys and the launch agent
+XenonDoctor --check-update    print the latest release against this build
+XenonDoctor --update          install the latest release over this bundle; --force reinstalls the same version
+XenonDoctor --window          open the window on the Status tab
+XenonDoctor --tester          open the window on the Button tester tab
+XenonDoctor --guide           open the window on the Controller guide tab
+XenonDoctor --menu            pop the menu two seconds after launch, for screenshots
 ```
+
+Add `--light` or `--dark` after any window flag to force that appearance for the app only. Set `XENON_TRACE=1` in the environment for one-line notes on stderr about the window (`open -n XenonDoctor.app --env XENON_TRACE=1 --stderr trace.txt --args --window`). Screenshots of the window come from `tools/winshot`, which lists and captures windows by the owner's display name, "Xenon Doctor"; System Events cannot see a menu bar app's windows.
 
 ## Layout
 
@@ -63,12 +79,14 @@ Sources/XenonDoctor/
   main.swift              command modes and app start
   Model/Chain.swift       Link, Severity, LinkState, ChainSnapshot, Probe, Repair
   Model/Pads.swift        the two pads by pencil mark and address
-  Probes/                 one file per link
+  Probes/                 one file per link, plus PadBattery.swift for the HID battery byte
   Steam/KeyValues.swift   Valve's config text format, parse and write
   Steam/Pin.swift         the four keys, the agent, unpin
-  Repairs/Repairs.swift   the five repairs
-  UI/                     status item, guide, tester
+  Repairs/Repairs.swift   the five repairs and the three go-there buttons
+  UI/                     status item and menu, the tabbed window, tester pane, guide text
+  Updater.swift           GitHub release check, download, swap, relaunch
+  Trace.swift             XENON_TRACE stderr notes
   SelfTest.swift          --self-test
 Resources/                Info.plist, launch agent plist, AppIcon.icns
-tools/                    gcprobe and btctl (standalone probes), makeicon
+tools/                    gcprobe and btctl (standalone probes), makeicon, winshot
 ```

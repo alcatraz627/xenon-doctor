@@ -13,6 +13,14 @@ The machine has Command Line Tools only, no Xcode, so there is no XCTest target.
 
 On the receiving Mac: unzip, drag to Applications, right-click, Open, Open once. The app is ad-hoc signed and not notarized.
 
+Publishing, once the owner has looked at the build:
+
+```
+gh release create vX.Y.Z XenonDoctor-X.Y.Z.zip --title "Xenon Doctor X.Y.Z" --notes "..."
+```
+
+The tag must be `v` plus the version in `Resources/Info.plist`, and the zip must be the one asset ending in `.zip`, because installed copies poll `releases/latest` and pick that asset. A Mac that already runs the app updates itself from the menu; only the very first install needs the zip by hand.
+
 ## How the diagnosis was done
 
 Everything was measured on the MacBook Pro on 2026-09-05 before any code was written. The record lives under `.claude/output/20260905-1715-xenon-doctor-change/`:

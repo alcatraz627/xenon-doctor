@@ -137,6 +137,34 @@ struct RelaunchGame: Repair {
     }
 }
 
+/// Open the one place where a person has to finish the job: a privacy pane, a download
+/// page, a Steam store page. Reads the link again after a moment so the row can update
+/// the instant the person comes back.
+struct GoThere: Repair {
+    let kind: RepairKind
+
+    var url: URL {
+        switch kind {
+        case .openBluetoothPrivacy:
+            return URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth")!
+        case .installSteam:
+            return URL(string: "https://store.steampowered.com/about/")!
+        default:
+            return URL(string: "steam://install/\(GameProbe.steamAppID)")!
+        }
+    }
+
+    func run() -> LinkState {
+        NSWorkspace.shared.open(url)
+        Thread.sleep(forTimeInterval: 1.5)
+        switch kind {
+        case .openBluetoothPrivacy: return RadioProbe().read()
+        case .installSteam: return SteamProbe().read()
+        default: return GameProbe().read()
+        }
+    }
+}
+
 enum Repairs {
     static func make(_ kind: RepairKind) -> Repair {
         switch kind {
@@ -145,6 +173,7 @@ enum Repairs {
         case .restartSteam: return RestartSteam()
         case .relaunchGame: return RelaunchGame()
         case .applyPin: return ApplyPin()
+        case .openBluetoothPrivacy, .installSteam, .installGame: return GoThere(kind: kind)
         }
     }
 }

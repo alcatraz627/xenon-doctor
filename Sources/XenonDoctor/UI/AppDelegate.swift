@@ -7,7 +7,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var openOnLaunch: String?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        Trace.log("didFinishLaunching openOnLaunch=\(openOnLaunch ?? "nil")")
         statusItem = StatusItemController()
+        Trace.log("status item built")
         if let which = openOnLaunch { statusItem?.open(which) }
     }
 }

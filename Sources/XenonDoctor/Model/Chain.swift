@@ -7,11 +7,26 @@ enum Severity: Int, Comparable {
 
     static func < (a: Severity, b: Severity) -> Bool { a.rawValue < b.rawValue }
 
+    /// For dots and glyphs, where a bright yellow reads well.
     var color: NSColor {
         switch self {
         case .fine: return .systemGreen
         case .fixable: return .systemYellow
         case .needsYou: return .systemRed
+        }
+    }
+
+    /// For words. System yellow vanishes on a light menu, so text gets an amber that
+    /// keeps the same meaning and stays readable; dark menus keep the bright yellow.
+    var textColor: NSColor {
+        switch self {
+        case .fine: return .systemGreen
+        case .needsYou: return .systemRed
+        case .fixable:
+            return NSColor(name: nil) { appearance in
+                let dark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                return dark ? .systemYellow : NSColor(srgbRed: 0.66, green: 0.45, blue: 0.0, alpha: 1)
+            }
         }
     }
 
@@ -38,9 +53,11 @@ enum Link: String, CaseIterable {
     }
 }
 
-/// A repair the app can run with one click. Each maps to one Repair type.
+/// A button the app can offer. The first five repair something; the last three take the
+/// person to the one place where the fix lives, because the app cannot do it for them.
 enum RepairKind: String, CaseIterable {
     case powerOnRadio, reconnectPad, restartSteam, relaunchGame, applyPin
+    case openBluetoothPrivacy, installSteam, installGame
 
     var title: String {
         switch self {
@@ -49,26 +66,39 @@ enum RepairKind: String, CaseIterable {
         case .restartSteam: return "Restart Steam"
         case .relaunchGame: return "Relaunch Stardew Valley"
         case .applyPin: return "Fix Steam settings"
+        case .openBluetoothPrivacy: return "Open Bluetooth privacy settings"
+        case .installSteam: return "Get Steam"
+        case .installGame: return "Install Stardew Valley in Steam"
+        }
+    }
+
+    /// True for the buttons that open a window elsewhere and leave the person to finish.
+    var goesThere: Bool {
+        switch self {
+        case .openBluetoothPrivacy, .installSteam, .installGame: return true
+        default: return false
         }
     }
 }
 
 /// What one link looks like right now: fine, or broken with the one button that fixes it.
-/// `hint` is a sentence for a person, shown when no button can help (for example,
-/// "hold Share and PS until the light blinks fast").
+/// `hint` is the full sentence for a person, shown in the window. `brief` is its one-line
+/// form for the menu; when a probe gives none, the menu shows the hint's first clause.
 struct LinkState {
     let link: Link
     let ok: Bool
     let detail: String
     let repair: RepairKind?
     let hint: String?
+    let brief: String?
 
-    init(_ link: Link, ok: Bool, detail: String, repair: RepairKind? = nil, hint: String? = nil) {
+    init(_ link: Link, ok: Bool, detail: String, repair: RepairKind? = nil, hint: String? = nil, brief: String? = nil) {
         self.link = link
         self.ok = ok
         self.detail = detail
         self.repair = repair
         self.hint = hint
+        self.brief = brief
     }
 
     var severity: Severity {
@@ -79,11 +109,20 @@ struct LinkState {
     /// Two or three words for the menu bar when this link is the problem.
     var shortHint: String {
         switch link {
-        case .radio: return "Bluetooth off"
+        case .radio: return "Bluetooth"
         case .pad: return detail.hasPrefix("no ") ? "pair pad" : "pad off"
         case .steam: return "Steam"
         case .game: return "game"
         }
+    }
+
+    /// One line for the menu, capped so the menu never grows a paragraph.
+    var menuHint: String? {
+        if let b = brief { return b }
+        guard let h = hint else { return nil }
+        let firstClause = h.split(whereSeparator: { $0 == "." || $0 == ":" }).first.map(String.init) ?? h
+        let trimmed = firstClause.trimmingCharacters(in: .whitespaces)
+        return trimmed.count > 64 ? String(trimmed.prefix(61)) + "…" : trimmed
     }
 }
 
