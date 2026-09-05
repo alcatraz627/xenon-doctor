@@ -1,0 +1,16 @@
+# Build products
+.build/
+XenonDoctor.app/
+*.zip
+tools/gcprobe
+tools/btctl
+.DS_Store
+
+# Session scratch (Claude Code)
+_*.claude.md
+.claude/wal.*
+.claude/settings.local.json
+.playwright-mcp/
+
+# Raw log extracts are large and local to one Mac; the notes that cite them are kept.
+.claude/output/**/evidence/*.txt

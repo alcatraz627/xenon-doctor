@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Keeps Steam's hands off the Stratos Xenon pads.
+	     At login this puts SDL's ignore list into the user's launchd environment,
+	     so any Steam started afterwards (Dock, Spotlight, login item) skips the pads
+	     and never builds its virtual keyboard and mouse for them. Both pads share
+	     Sony vendor 0x054c and product 0x09cc. Installed and removed by Xenon Doctor. -->
+	<key>Label</key>
+	<string>com.xenondoctor.steam-env</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/launchctl</string>
+		<string>setenv</string>
+		<string>SDL_GAMECONTROLLER_IGNORE_DEVICES</string>
+		<string>0x054c/0x09cc</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+</dict>
+</plist>
