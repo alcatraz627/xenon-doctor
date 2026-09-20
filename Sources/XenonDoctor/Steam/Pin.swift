@@ -29,18 +29,7 @@ enum Pin {
         for (path, want) in keys where store.get(path: path) != want {
             missing.append(path.joined(separator: "/") + "=" + want)
         }
-        if !FileManager.default.fileExists(atPath: agentURL.path) {
-            missing.append("launch agent \(agentLabel)")
-        }
         return missing
-    }
-
-    /// Is the ignore list in the login session right now, which is what a Steam started
-    /// from the Dock or as a login item inherits. The plist on disk is not enough: it
-    /// takes effect at the next login, and a bootout leaves the file and drops the value.
-    static func sessionHasIgnoreList() -> Bool {
-        let (status, out) = Shell.run("/bin/launchctl", ["getenv", "SDL_GAMECONTROLLER_IGNORE_DEVICES"])
-        return status == 0 && out.trimmingCharacters(in: .whitespacesAndNewlines) == Pads.sdlIgnoreValue
     }
 
     enum ApplyError: Error, CustomStringConvertible {
@@ -113,21 +102,16 @@ enum Pin {
         }
     }
 
-    /// Installs the launch agent from the app bundle (or the source tree) and loads it now.
-    static func installAgent() throws {
+    /// Undo the old session-wide ignore-list mechanism that earlier versions installed:
+    /// clear the variable and remove the launch agent. Blinded every SDL game, not just
+    /// Steam. Safe to run on every launch.
+    static func heal() {
+        _ = Shell.run("/bin/launchctl", ["bootout", "gui/\(getuid())/\(agentLabel)"])
+        _ = Shell.run("/bin/launchctl", ["unsetenv", "SDL_GAMECONTROLLER_IGNORE_DEVICES"])
         let fm = FileManager.default
-        let candidates = [
-            Bundle.main.resourceURL?.appendingPathComponent("\(agentLabel).plist"),
-            URL(fileURLWithPath: fm.currentDirectoryPath).appendingPathComponent("Resources/\(agentLabel).plist"),
-        ].compactMap { $0 }
-        guard let src = candidates.first(where: { fm.fileExists(atPath: $0.path) }) else {
-            throw NSError(domain: "XenonDoctor", code: 1, userInfo: [NSLocalizedDescriptionKey: "agent plist not found next to the app"])
+        for url in [agentURL, agentURL.appendingPathExtension("disabled")] {
+            if fm.fileExists(atPath: url.path) { try? fm.removeItem(at: url) }
         }
-        try fm.createDirectory(at: agentURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if fm.fileExists(atPath: agentURL.path) { try fm.removeItem(at: agentURL) }
-        try fm.copyItem(at: src, to: agentURL)
-        _ = Shell.run("/bin/launchctl", ["bootstrap", "gui/\(getuid())", agentURL.path])
-        _ = Shell.run("/bin/launchctl", ["setenv", "SDL_GAMECONTROLLER_IGNORE_DEVICES", Pads.sdlIgnoreValue])
     }
 }
 

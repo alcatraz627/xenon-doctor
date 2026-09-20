@@ -46,8 +46,8 @@ struct ReconnectPad: Repair {
     }
 }
 
-/// Quit Steam gently, make sure the pin is in place, and start Steam from a clean
-/// environment that carries only the ignore list. Never a kill signal.
+/// Quit Steam gently, make sure its controller settings are in place, and start it again.
+/// Never a kill signal.
 struct RestartSteam: Repair {
     let kind = RepairKind.restartSteam
 
@@ -66,7 +66,6 @@ struct RestartSteam: Repair {
 
     static func launchSteam() {
         let env = [
-            "SDL_GAMECONTROLLER_IGNORE_DEVICES": Pads.sdlIgnoreValue,
             "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
             "HOME": FileManager.default.homeDirectoryForCurrentUser.path,
             "USER": NSUserName(),
@@ -80,9 +79,6 @@ struct RestartSteam: Repair {
         }
         if !Pin.check().isEmpty {
             do { try Pin.applyKeys() } catch { }
-            if !FileManager.default.fileExists(atPath: Pin.agentURL.path) {
-                do { try Pin.installAgent() } catch { }
-            }
         }
         RestartSteam.launchSteam()
         let deadline = Date().addingTimeInterval(30)
@@ -102,7 +98,6 @@ struct ApplyPin: Repair {
         }
         do {
             try Pin.applyKeys()
-            try Pin.installAgent()
         } catch {
             return LinkState(.steam, ok: false, detail: "could not fix settings: \(error)", repair: .applyPin)
         }

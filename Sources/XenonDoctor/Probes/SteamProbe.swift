@@ -19,11 +19,9 @@ enum SteamPaths {
     }
 }
 
-/// Is Steam installed, is it running, was it started with the ignore list, and has it
-/// kept its hands off the pad since it started. A Steam that opened the pad is the state
-/// that preceded the freeze, so it is reported as broken even though games may still work.
-/// A Steam that is not running is fine only when the next launch will inherit the ignore
-/// list, which means the launch agent must be loaded in this login session now.
+/// Is Steam installed, is it running, are its controller settings pinned, and has it kept
+/// its hands off the pad since it started. A Steam that opened the pad is the state that
+/// preceded the freeze, so it is reported as broken even though games may still work.
 struct SteamProbe: Probe {
     let link = Link.steam
 
@@ -33,21 +31,6 @@ struct SteamProbe: Probe {
 
     static func installedSteam() -> URL? {
         NSWorkspace.shared.urlForApplication(withBundleIdentifier: SteamPaths.bundleID)
-    }
-
-    /// Environment of another process, read the way `ps -E` does. Only the one key matters.
-    static func environmentHasIgnoreList(pid: pid_t) -> Bool {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/bin/ps")
-        p.arguments = ["-E", "-p", "\(pid)", "-o", "command="]
-        let pipe = Pipe()
-        p.standardOutput = pipe
-        p.standardError = FileHandle.nullDevice
-        guard (try? p.run()) != nil else { return false }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        p.waitUntilExit()
-        let s = String(decoding: data, as: UTF8.self)
-        return s.contains("SDL_GAMECONTROLLER_IGNORE_DEVICES=\(Pads.sdlIgnoreValue)")
     }
 
     /// True when Steam's controller log shows it configured a pad after `since`.
@@ -74,23 +57,19 @@ struct SteamProbe: Probe {
                              brief: "Install Steam, sign in, come back")
         }
         guard let app = SteamProbe.runningSteam() else {
-            if !Pin.check().isEmpty || !Pin.sessionHasIgnoreList() {
+            if !Pin.check().isEmpty {
                 return LinkState(.steam, ok: false, detail: "not running, and its next start would grab the controller",
                                  repair: .applyPin)
             }
             return LinkState(.steam, ok: true, detail: "not running (starts with the game)", idle: true)
         }
         let pinned = Pin.check().isEmpty
-        let hasEnv = SteamProbe.environmentHasIgnoreList(pid: app.processIdentifier)
         let opened = SteamProbe.openedPad(since: app.launchDate ?? .distantPast)
-        if hasEnv && pinned && !opened {
+        if pinned && !opened {
             return LinkState(.steam, ok: true, detail: "running, leaving the controller to the game")
         }
         if !pinned {
             return LinkState(.steam, ok: false, detail: "running with the wrong controller settings", repair: .applyPin)
-        }
-        if !hasEnv {
-            return LinkState(.steam, ok: false, detail: "started without the controller ignore list", repair: .restartSteam)
         }
         return LinkState(.steam, ok: false, detail: "has taken over the controller", repair: .restartSteam)
     }

@@ -8,8 +8,9 @@ import IOKit.hid
 /// Over Bluetooth the pad sends a short report (id 0x01) with no battery byte until
 /// something asks it for a feature report, after which it switches to the full report
 /// (id 0x11) for the rest of the connection. The game does that ask on its own; the app
-/// does it too, so the level is known before the game starts. Nothing is written to
-/// the pad, and the device is opened shared, never seized.
+/// does not, so it neither freezes on a pad that will not answer nor disturbs the pad a
+/// game is reading. The level is known once a game is running. The device is opened
+/// shared, never seized.
 final class PadBattery {
     static let shared = PadBattery()
 
@@ -28,9 +29,12 @@ final class PadBattery {
 
     /// Starts listening on the main run loop. Safe to call many times.
     func start() {
-        lock.lock(); defer { lock.unlock() }
-        guard !started else { return }
+        lock.lock()
+        if started { lock.unlock(); return }
         started = true
+        lock.unlock()
+        // No self.lock during IOKit setup: IOHIDManagerOpen calls attach on the main run
+        // loop, which needs the same lock; holding it here deadlocked against a probe thread.
         let m = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
         let match: [String: Any] = [kIOHIDVendorIDKey: Pads.vendorID, kIOHIDProductIDKey: Pads.productID]
         IOHIDManagerSetDeviceMatching(m, match as CFDictionary)
@@ -72,14 +76,10 @@ final class PadBattery {
             let dev = Unmanaged<IOHIDDevice>.fromOpaque(sender).takeUnretainedValue()
             Unmanaged<PadBattery>.fromOpaque(ctx).takeUnretainedValue().handle(dev, reportID: UInt8(reportID), report: report, length: Int(length))
         }, ctx)
-        // Ask once for the calibration feature report; the pad answers by switching to
-        // full input reports. Either id does it on a DualShock 4; the clone gets both.
-        for id in [0x05, 0x02] as [CFIndex] {
-            var fb = [UInt8](repeating: 0, count: 64)
-            fb[0] = UInt8(id)
-            var len: CFIndex = 64
-            _ = IOHIDDeviceGetReport(device, kIOHIDReportTypeFeature, id, &fb, &len)
-        }
+        // No feature report is sent. A synchronous IOHIDDeviceGetReport here froze the app
+        // for good when the pad did not answer, and it also flipped the pad's report mode
+        // under any game reading it. Battery comes only from the full reports (id 0x11) the
+        // game triggers on its own.
     }
 
     private func detach(_ device: IOHIDDevice) {
