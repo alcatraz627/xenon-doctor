@@ -22,7 +22,24 @@ struct RadioProbe: Probe {
         }
     }
 
+    /// True until the person has answered macOS's "may Xenon Doctor use Bluetooth" prompt.
+    /// Every IOBluetooth call blocks behind that prompt, which used to read as "not answering".
+    static var permissionUndecided: Bool { CBCentralManager.authorization == .notDetermined }
+
+    private static var prompter: CBCentralManager?
+
+    /// Makes macOS show the Bluetooth prompt: creating a central manager is the trigger.
+    static func askPermission() {
+        DispatchQueue.main.async { if prompter == nil { prompter = CBCentralManager(delegate: nil, queue: nil) } }
+    }
+
     func read() -> LinkState {
+        if RadioProbe.permissionUndecided {
+            RadioProbe.askPermission()
+            return LinkState(.radio, ok: false, detail: "waiting for you to allow Bluetooth",
+                             hint: "macOS is asking whether Xenon Doctor may use Bluetooth. Click Allow in that dialog; the rows fill in on their own after that.",
+                             brief: "Click Allow in the Bluetooth dialog")
+        }
         if btPowerGet() != 1 {
             return LinkState(.radio, ok: false, detail: "off", repair: .powerOnRadio)
         }

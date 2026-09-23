@@ -23,9 +23,25 @@ final class PadBattery {
     private var manager: IOHIDManager?
     private var buffers: [UnsafeMutableRawPointer: UnsafeMutablePointer<UInt8>] = [:]
     private var readings: [String: Reading] = [:]
+    /// Pads attached right now, by bare serial (the pad's Bluetooth address), with the
+    /// time each appeared. This is the one answer to "is a pad connected" that every
+    /// surface reads, because it comes from the HID layer the games read through.
+    private var attached: [String: Date] = [:]
     private let lock = NSLock()
     private var started = false
     private static let bufferSize = 128
+
+    /// The known pads attached at the HID layer, in the order they appeared.
+    func attachedPads() -> [KnownPad] {
+        lock.lock(); defer { lock.unlock() }
+        return attached.sorted { $0.value < $1.value }.compactMap { Pads.pad(forMAC: $0.key) }
+    }
+
+    /// True when any device with the pad's vendor and product id is attached, known or not.
+    var anyAttached: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return !attached.isEmpty
+    }
 
     /// Starts listening on the main run loop. Safe to call many times.
     func start() {
@@ -69,7 +85,12 @@ final class PadBattery {
     private func attach(_ device: IOHIDDevice) {
         let key = Unmanaged.passUnretained(device).toOpaque()
         let buf = UnsafeMutablePointer<UInt8>.allocate(capacity: PadBattery.bufferSize)
-        lock.lock(); buffers[key] = buf; lock.unlock()
+        let serial = IOHIDDeviceGetProperty(device, kIOHIDSerialNumberKey as CFString) as? String
+        lock.lock()
+        buffers[key] = buf
+        if let s = serial { attached[KnownPad.bare(s)] = Date() }
+        lock.unlock()
+        NotificationCenter.default.post(name: PadBattery.padsChanged, object: nil)
         let ctx = Unmanaged.passUnretained(self).toOpaque()
         IOHIDDeviceRegisterInputReportCallback(device, buf, CFIndex(PadBattery.bufferSize), { ctx, result, sender, _, reportID, report, length in
             guard let ctx = ctx, let sender = sender, result == kIOReturnSuccess else { return }
@@ -88,9 +109,14 @@ final class PadBattery {
         if let buf = buffers.removeValue(forKey: key) { buf.deallocate() }
         if let serial = IOHIDDeviceGetProperty(device, kIOHIDSerialNumberKey as CFString) as? String {
             readings.removeValue(forKey: KnownPad.bare(serial))
+            attached.removeValue(forKey: KnownPad.bare(serial))
         }
         lock.unlock()
+        NotificationCenter.default.post(name: PadBattery.padsChanged, object: nil)
     }
+
+    /// Posted on the main thread when a pad attaches or detaches, so the rows re-read at once.
+    static let padsChanged = Notification.Name("XenonDoctor.padsChanged")
 
     private func handle(_ device: IOHIDDevice, reportID: UInt8, report: UnsafeMutablePointer<UInt8>, length: Int) {
         // Layout of the state block is the same for both transports; Bluetooth's full

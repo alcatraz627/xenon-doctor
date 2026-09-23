@@ -1,4 +1,5 @@
 import AppKit
+import GameController
 
 /// The menu bar item. The glyph is a game controller tinted by the worst link: green all
 /// fine, yellow one click fixes it, red needs a person. When something is wrong a two-word
@@ -28,6 +29,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         paintGlyph(nil)
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in self?.refresh() }
+        // A pad arriving or leaving re-reads the rows at once, so the Status tab never
+        // trails the tester by a timer cycle.
+        for name in [PadBattery.padsChanged, .GCControllerDidConnect, .GCControllerDidDisconnect] {
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in self?.refresh() }
+        }
         updater.startPolling()
     }
 
@@ -225,12 +231,17 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         busyKind = kind
         rebuildMenu()
         doctor.update(snapshot, busy: kind)
+        // The chain is read again after the repair and shown as is; a repair never paints
+        // its own row green.
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            _ = Repairs.make(kind).run()
+            let (_, chain) = Repairs.runAndReread(kind)
             DispatchQueue.main.async {
                 self?.busy = false
                 self?.busyKind = nil
-                self?.refresh()
+                self?.snapshot = chain
+                self?.paintGlyph(chain)
+                self?.rebuildMenu()
+                self?.doctor.update(chain, busy: nil)
             }
         }
     }

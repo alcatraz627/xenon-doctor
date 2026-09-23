@@ -51,14 +51,14 @@ tools/btctl cycle      radio off and on
 hidutil list           every HID device; vendor 0x28de entries are Steam's virtual devices
 ```
 
-## The launch agent
+## The old controller block
 
 ```
-launchctl print gui/501/com.xenondoctor.steam-env
 launchctl getenv SDL_GAMECONTROLLER_IGNORE_DEVICES
+ps -Ewww -o command= -p <game pid>
 ```
 
-The first shows the agent loaded with `last exit code = 0`; the second prints `0x054c/0x09cc`.
+Both must come back without the variable. Versions up to 0.3.2 set it through a launch agent, `com.xenondoctor.steam-env`, and it blinded every SDL game. The app clears it at launch and the Stardew row clears it again whenever it reappears; the second line is how the row sees a game that started before the clear (only processes Steam started show their environment this way).
 
 ## After a freeze
 

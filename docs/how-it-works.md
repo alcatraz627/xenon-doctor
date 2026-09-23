@@ -1,25 +1,45 @@
 # How Xenon Doctor works
 
-Xenon Doctor is a macOS menu bar app for two Cosmic Byte Stratos Xenon gamepads, Steam, and Stardew Valley. It watches a four-link chain and repairs a broken link with one click. It exists because the pads worked some evenings and not others, and every bad evening ended in restarting Bluetooth, Steam, the game, or the Mac.
+Xenon Doctor is a macOS menu bar app for two Cosmic Byte Stratos Xenon gamepads, Steam, and three games: Stardew Valley, Factorio and Undertale. It watches the chain from the pad to each game and repairs a broken link with one click. It exists because the pads worked some evenings and not others, and every bad evening ended in restarting Bluetooth, Steam, the game, or the Mac.
 
 ## The chain
 
+The three games take three different paths from the pad, and each row probes its own path. A green row that only proved the pad reaches macOS was the 0.3.2 bug: the doctor said fine while every game was blind.
+
 ```
- pad ──Bluetooth──▶ macOS ──GameController──▶ Stardew Valley
-                      │
-                      └── Steam (kept out of the way)
+                      ┌────────────────────────┐
+ pad ──Bluetooth──▶   │ macOS HID              │
+                      └──┬─────────┬────────┬──┘
+                         │         │        │
+                  SDL/HIDAPI  GameController  Xenon Doctor's key mapper
+                         │         │        │
+                     Stardew    Factorio   Undertale (as key presses)
+                                 tester
+                      Steam: Steam Input off for all three
 ```
 
 | Link | What "fine" means | What the app checks |
 |---|---|---|
 | Bluetooth | radio on, and this app allowed to use it | `IOBluetoothPreferenceGetControllerPowerState`, `CBCentralManager.authorization` |
 | Controller | a known pad connected and seen by macOS as a DualShock | paired devices by Bluetooth address, `GCController` list and its product category, battery from the pad's own HID report |
-| Steam | installed; running with the ignore list, pin in place, has not opened the pad; or not running with the agent loaded so its next start inherits the list | `NSWorkspace`, Steam's process environment, four keys in `localconfig.vdf`, `launchctl getenv`, `controller_ui.txt` since Steam started |
-| Stardew Valley | installed; running, or cleanly not running | `appmanifest_413150.acf` in each Steam library, the game process, Steam's `gameprocess_log.txt` for a game Steam still lists as running |
+| Steam | installed, and its controller settings pinned (Steam Input off for every game, Home button not reaching Steam) | `NSWorkspace`, the pinned keys in `localconfig.vdf`. Whether Steam has opened the pad for its own windows is a note, not breakage: the keys cannot stop that, and the games read the pad directly |
+| Stardew Valley | installed; running or cleanly not running; and nothing tells its SDL to ignore the pad | Steam's manifest and process log, the game process, `launchctl getenv SDL_GAMECONTROLLER_IGNORE_DEVICES` (cleared on the spot when found), the running game's own environment via `ps -E` |
+| Factorio | as Stardew, and its input method set to game controller | the same Steam checks, plus `input-method` under `[input]` in `~/Library/Application Support/factorio/config/config.ini` |
+| Undertale | as Stardew, and macOS lets Xenon Doctor press keys for it | the same Steam checks, plus `AXIsProcessTrusted` |
 
-Each row is green (fine), yellow (one button fixes it), or red (a person has to act, and the row says what to press). A row that is fine only because nothing is happening (Steam or the game not running) wears a faded green, so dormant and working read differently at a glance. The menu shows a one-line hint under a broken row; the window's Status tab shows the full sentence.
+Each row is green (fine), yellow (one button fixes it), or red (a person has to act, and the row says what to press). A row that is fine only because nothing is happening (Steam or a game not running) wears a faded green, so dormant and working read differently at a glance. The menu shows a one-line hint under a broken row; the window's Status tab shows the full sentence.
 
-When all four rows are green and the game is running, a fifth row appears in the menu and the window: "Choppa da Wood (enjoy the game)", with a green dot that breathes. It is the one moment the app has nothing left to say.
+When every row is green and a game is running, one more row appears in the menu and the window: "Choppa da Wood (enjoy the game)", with a green dot that breathes. It is the one moment the app has nothing left to say.
+
+## A repair is judged by the chain after it
+
+Every button runs its repair and then reads the whole chain again, and the rows show that second reading. A repair never paints its own row green: the row it touched may be fine while the fix exposed another (Fix Steam settings restarts Steam, which can change what a game row sees), and only the full re-read shows that. From the terminal, `--repair K` prints the repair's own report and then the chain, and its exit code is the chain's.
+
+## Undertale: the key mapper
+
+Undertale is a GameMaker game and cannot read a pad on a Mac (its own FAQ says so, and its bundled gamepad library never answered this pad). So while Undertale is the front window, Xenon Doctor turns pad presses into key presses: D-pad and left stick are the arrows, Cross is Z, Circle and Square are X, Triangle is C, Options is Enter. The moment Undertale is not in front, or the pad disconnects, every held key is released. macOS only lets an app press keys with its Accessibility switch on, which is the Undertale row's one go-there button.
+
+That switch is remembered by the app's code signature, so `build.sh` signs with the household's own certificate (`tools/signing-cert.sh` makes it once, on the Mac that builds). An ad-hoc signature changes with every build, and the switch would look on and do nothing after each update.
 
 The pads themselves come from a small JSON registry, so a third pad is one line and no rebuild: [`pads-registry.md`](pads-registry.md).
 
@@ -41,17 +61,13 @@ Cmd-W closes the window, Ctrl-Tab and Ctrl-Shift-Tab cycle the tabs, Cmd-1, Cmd-
 
 macOS's GameController layer reports zero for this pad, so the app reads the pad's own input report over HID (`PadBattery.swift`). A DualShock 4 over Bluetooth sends a short report until something asks it for a feature report, then switches to the full report `0x11`, whose byte 32 holds the charge in tenths and a cable flag. The app asks once when the pad appears and reads the byte from every report after. Nothing is written to the pad, and the device is opened shared, so the game is not disturbed.
 
-## Why Steam is kept out
+## Why Steam Input is kept off
 
-The pads are DualShock 4 clones. Steam recognises them as PS4 controllers, opens them, and creates a virtual keyboard and mouse for its desktop layout. On this Mac that path produced a keyboard-and-mouse mapping inside the game once, hundreds of virtual device add-and-remove events per session, and one display freeze that needed the power button. Stardew Valley reads the pad directly through its own SDL and plays cleanly that way.
+The pads are DualShock 4 clones. With Steam Input on, Steam recognises them as PS4 controllers and applies its own layouts inside games. On this Mac that path produced a keyboard-and-mouse mapping inside the game once, hundreds of virtual device add-and-remove events per session, and one display freeze that needed the power button. All three games are better served with Steam Input off: Stardew and Factorio read the pad directly, and Undertale gets its keys from Xenon Doctor.
 
-Steam's own settings cannot stop it opening the pad. Its controller layer is SDL, and SDL honours an environment variable:
+The pin is a set of keys in `localconfig.vdf`: PlayStation support off, the Home button not focusing Steam, the chord layer off, and Steam Input forced off per game for each of the three games. Steam only writes that file when it quits, so the Fix button quits Steam, writes, and relaunches. The measured record is in `.claude/output/20260905-1715-xenon-doctor-change/pin.md`.
 
-```
-SDL_GAMECONTROLLER_IGNORE_DEVICES=0x054c/0x09cc
-```
-
-A launch agent, `com.xenondoctor.steam-env`, puts that variable into the login session at login, so Steam started from the Dock or at login inherits it. The app installs the agent and also writes four Steam settings that stop the Home button reaching Steam and disable Steam Input for the game. The measured record is in `.claude/output/20260905-1715-xenon-doctor-change/pin.md`.
+Versions 0.2 through 0.3.2 also put `SDL_GAMECONTROLLER_IGNORE_DEVICES` into the login session through a launch agent so Steam's own SDL would skip the pad. That variable is read by every SDL program, so it blinded Stardew too. It is gone; the app clears it on every launch and the Stardew row clears it again whenever it reappears.
 
 ## Repairs
 
@@ -59,9 +75,11 @@ A launch agent, `com.xenondoctor.steam-env`, puts that variable into the login s
 |---|---|
 | Turn Bluetooth on | powers the radio on and waits |
 | Reconnect controller | asks each paired pad to connect; if none answers in eight seconds, cycles the radio once and asks again |
-| Restart Steam | quits Steam and waits for it to exit (Steam answers "cancel" and then exits on its own, up to 75 s), makes sure the pin is in place, launches Steam from a clean environment carrying only the ignore list |
-| Fix Steam settings | quits Steam, writes the four keys with a backup beside the file, installs and loads the launch agent, relaunches Steam |
-| Relaunch Stardew Valley | asks the game to quit, waits, launches it again through Steam. Never a kill signal |
+| Fix Steam settings | quits Steam and waits for it to exit (Steam answers "cancel" and then exits on its own, up to 75 s), writes the pinned keys with a backup beside the file, relaunches Steam |
+| Clear the stale controller block | clears the old login-session variable again; offered only when it came back after the app cleared it |
+| Turn on Factorio's controller setting | writes `input-method=game-controller` with a backup beside the file; a running Factorio is asked to quit first (it offers to save), then relaunched |
+| Allow Xenon Doctor to press keys | lists the app under Accessibility and opens that pane; the person flips the switch |
+| Relaunch Stardew Valley, Factorio, Undertale | asks the game to quit, waits, launches it again through Steam. Never a kill signal |
 
 ## The one failure no button fixes
 
@@ -74,10 +92,10 @@ The app asks `https://api.github.com/repos/alcatraz627/xenon-doctor/releases/lat
 ## Command modes
 
 ```
-XenonDoctor --status          the four rows as text, exit 1 when any is not fine
-XenonDoctor --repair K        one repair: powerOnRadio reconnectPad restartSteam relaunchGame applyPin
-XenonDoctor --self-test       parser round trip, pad lookup, classifier, menu hints, version compare; exit 0 on pass
-XenonDoctor --unpin           test reset: remove the four keys and the launch agent
+XenonDoctor --status          every row as text, exit 1 when any is not fine
+XenonDoctor --repair K        one repair, then the whole chain again; exit code is the chain's
+XenonDoctor --self-test       parser round trip, pad lookup, classifier, Factorio config edit, key table, version compare; exit 0 on pass
+XenonDoctor --unpin           test reset: remove the pinned keys and any old launch agent
 XenonDoctor --pads            print the pad registry and where it was read from
 XenonDoctor --add-pad M MAC   add a pad of the same model; --remove-pad M takes it out
 XenonDoctor --check-update    print the latest release against this build
@@ -97,15 +115,19 @@ Add `--light` or `--dark` after any window flag to force that appearance for the
 Sources/XenonDoctor/
   main.swift              command modes and app start
   Model/Chain.swift       Link, Severity, LinkState, ChainSnapshot, Probe, Repair
+  Model/Games.swift       the three games: bundle id, Steam id, which input path each uses
   Model/Pads.swift        the pad registry: JSON file, lookup by address, add and remove
-  Probes/                 one file per link, plus PadBattery.swift for the HID battery byte
+  Probes/                 one file per shared link, GameProbe for every game, PadBlock for the old
+                          login-session variable, PadBattery for the HID battery byte
+  Games/FactorioConfig.swift   read and set input-method in Factorio's config.ini
+  Games/KeyMapper.swift        pad presses to key presses for Undertale, Accessibility check
   Steam/KeyValues.swift   Valve's config text format, parse and write
-  Steam/Pin.swift         the four keys, the agent, unpin
-  Repairs/Repairs.swift   the five repairs and the three go-there buttons
+  Steam/Pin.swift         the pinned keys, heal, unpin
+  Repairs/Repairs.swift   the repairs, the go-there buttons, and the re-read after each
   UI/                     status item and menu, the tabbed window, tester pane, the SceneKit pad model, guide text
   Updater.swift           GitHub release check, download, swap, relaunch
   Trace.swift             XENON_TRACE stderr notes
   SelfTest.swift          --self-test
-Resources/                Info.plist, launch agent plist, pads.json, beanu-boss.png, AppIcon.icns
-tools/                    gcprobe and btctl (standalone probes), makeicon, winshot
+Resources/                Info.plist, pads.json, beanu-boss.png, AppIcon.icns
+tools/                    gcprobe and btctl (standalone probes), makeicon, winshot, signing-cert.sh
 ```

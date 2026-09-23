@@ -2,11 +2,11 @@ import Foundation
 import IOBluetooth
 import GameController
 
-/// Which known pad is paired, which is connected, and whether macOS's own game
-/// controller layer sees it as a DualShock. That layer is what Stardew reads through, so a
-/// pad that is "connected" in Bluetooth but absent or misread there is the drop the owner
-/// keeps hitting. The pad has other modes that show up as a different kind of controller;
-/// that is caught here too, with the two buttons that put it back.
+/// Which known pad is connected, and whether macOS's game controller layer sees it as a
+/// DualShock. "Connected" is answered by the HID layer (the device list every game reads
+/// through, by the pad's serial, which is its Bluetooth address); the Bluetooth stack is
+/// only asked when no pad is attached, to say whether one is paired. The tester reads the
+/// same two lists, so the two tabs cannot disagree about whether a pad is there.
 struct PadProbe: Probe {
     let link = Link.pad
     static let pairingHint = "Hold Share and PS together until the light bar blinks fast, then let go."
@@ -19,8 +19,8 @@ struct PadProbe: Probe {
         let rssi: Int
     }
 
-    /// The last Bluetooth reading, for surfaces on the main thread (the tester's device
-    /// card) that must never call IOBluetooth themselves: it can block for good.
+    /// The last reading, for the tester's device card. Written here, read on the main
+    /// thread; the card never asks IOBluetooth itself, because that call can block for good.
     private static var latestLock = NSLock()
     private static var latestSeen: [Seen] = []
     static var latest: [Seen] {
@@ -28,6 +28,22 @@ struct PadProbe: Probe {
         return latestSeen
     }
 
+    private static func remember(_ seen: [Seen]) {
+        latestLock.lock()
+        latestSeen = seen
+        latestLock.unlock()
+    }
+
+    /// Starts the two listeners this probe and the tester share. Must run on the main
+    /// thread once, before any read: GameController and the HID manager deliver on the
+    /// main run loop, and starting discovery from a worker thread left the list empty on
+    /// the main thread while a worker saw the pad, which is how the two tabs disagreed.
+    static func prepare() {
+        PadBattery.shared.start()
+        GCController.startWirelessControllerDiscovery { }
+    }
+
+    /// Paired known pads from the Bluetooth stack. Only called when no pad is attached.
     func pairedKnownPads() -> [Seen] {
         guard let devices = IOBluetoothDevice.pairedDevices() as? [IOBluetoothDevice] else { return [] }
         var out: [Seen] = []
@@ -37,19 +53,7 @@ struct PadProbe: Probe {
             let connected = d.isConnected()
             out.append(Seen(pad: pad, connected: connected, name: d.name ?? "", rssi: connected ? Int(d.rawRSSI()) : 127))
         }
-        PadProbe.latestLock.lock()
-        PadProbe.latestSeen = out
-        PadProbe.latestLock.unlock()
         return out
-    }
-
-    /// GameController needs a run loop turn to enumerate. Half a second is enough in
-    /// practice, and the same turn lets the battery listener receive a report.
-    func gameControllerPads() -> [GCController] {
-        PadBattery.shared.start()
-        GCController.startWirelessControllerDiscovery { }
-        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
-        return GCController.controllers()
     }
 
     static func isDualShock(_ c: GCController) -> Bool {
@@ -67,43 +71,71 @@ struct PadProbe: Probe {
         return nil
     }
 
+    /// The pads attached at the HID layer and the controllers GameController lists. A cold
+    /// process (the --status command) is given a moment for both to fill.
+    static func attachedNow(wait: TimeInterval = 2.5) -> (pads: [KnownPad], any: Bool, gc: [GCController]) {
+        let deadline = Date().addingTimeInterval(wait)
+        while Date() < deadline {
+            if PadBattery.shared.anyAttached || !GCController.controllers().isEmpty { break }
+            Thread.sleep(forTimeInterval: 0.2)
+        }
+        return (PadBattery.shared.attachedPads(), PadBattery.shared.anyAttached, GCController.controllers())
+    }
+
     func read() -> LinkState {
+        let now = PadProbe.attachedNow()
+        let dualShocks = now.gc.filter { PadProbe.isDualShock($0) }
+
+        if !now.pads.isEmpty {
+            let marks = now.pads.map { $0.mark }.joined(separator: " and ")
+            PadProbe.remember(now.pads.map { Seen(pad: $0, connected: true, name: now.gc.first?.vendorName ?? "", rssi: 127) })
+            if dualShocks.isEmpty, let other = now.gc.first {
+                let kind = other.productCategory.isEmpty ? "another kind of controller" : "a \(other.productCategory)"
+                return LinkState(.pad, ok: false, detail: "\(marks) connected in the wrong mode, seen as \(kind)",
+                                 hint: "Turn the pad off (hold PS for ten seconds), then hold Share and PS together until the light bar blinks fast. That puts it back in PS4 mode.",
+                                 brief: "Wrong mode: turn off, then Share + PS")
+            }
+            if dualShocks.isEmpty {
+                return LinkState(.pad, ok: false, detail: "\(marks) connected but macOS is not reading it",
+                                 repair: .reconnectPad, hint: PadProbe.pairingHint, brief: PadProbe.pairingBrief)
+            }
+            var detail = "\(marks) connected"
+            if now.pads.count == 1, let battery = PadProbe.batteryText(for: now.pads[0], controller: dualShocks.first) {
+                detail += ", \(battery)"
+            }
+            if now.pads.count > 1 {
+                return LinkState(.pad, ok: true, detail: detail,
+                                 hint: "Two pads are on. The game listens to the first one; if the wrong pad is in charge, hold PS on the other for ten seconds to turn it off.",
+                                 brief: "Two pads on; the game takes the first")
+            }
+            return LinkState(.pad, ok: true, detail: detail)
+        }
+
+        if now.any || !now.gc.isEmpty {
+            // Something with this pad's ids is attached, but it is not in the registry.
+            PadProbe.remember([])
+            return LinkState(.pad, ok: false, detail: "a Stratos Xenon is connected that is not in the pad list",
+                             hint: "Add it once from a terminal: XenonDoctor --add-pad MARK address. Its address is in System Settings, Bluetooth, under the pad's name.",
+                             brief: "Unknown pad; add it with --add-pad")
+        }
+
+        // Nothing attached: ask the Bluetooth stack whether a pad is at least paired. Not
+        // before the person has allowed Bluetooth; the call would block behind the prompt.
+        if RadioProbe.permissionUndecided {
+            PadProbe.remember([])
+            return LinkState(.pad, ok: false, detail: "waiting for you to allow Bluetooth", brief: "Click Allow in the Bluetooth dialog")
+        }
         let paired = pairedKnownPads()
+        PadProbe.remember(paired)
         if paired.isEmpty {
             return LinkState(.pad, ok: false, detail: "no Stratos Xenon paired to this Mac",
                              hint: "Pair it once: " + PadProbe.pairingHint,
                              brief: "Pair it: " + PadProbe.pairingBrief)
         }
-        let connected = paired.filter { $0.connected }
-        if connected.isEmpty {
-            let marks = paired.map { $0.pad.mark }.joined(separator: " and ")
-            return LinkState(.pad, ok: false, detail: "\(marks) paired, not connected",
-                             repair: .reconnectPad,
-                             hint: "If it blinks, connects, then drops: " + PadProbe.pairingHint,
-                             brief: "Blinks then drops? " + PadProbe.pairingBrief)
-        }
-        let gc = gameControllerPads()
-        let marks = connected.map { $0.pad.mark }.joined(separator: " and ")
-        let dualShocks = gc.filter { PadProbe.isDualShock($0) }
-        if dualShocks.isEmpty, let other = gc.first {
-            let kind = other.productCategory.isEmpty ? "another kind of controller" : "a \(other.productCategory)"
-            return LinkState(.pad, ok: false, detail: "\(marks) connected in the wrong mode, seen as \(kind)",
-                             hint: "Turn the pad off (hold PS for ten seconds), then hold Share and PS together until the light bar blinks fast. That puts it back in PS4 mode.",
-                             brief: "Wrong mode: turn off, then Share + PS")
-        }
-        if dualShocks.isEmpty {
-            return LinkState(.pad, ok: false, detail: "\(marks) connected but macOS is not reading it",
-                             repair: .reconnectPad, hint: PadProbe.pairingHint, brief: PadProbe.pairingBrief)
-        }
-        var detail = "\(marks) connected"
-        if connected.count == 1, let battery = PadProbe.batteryText(for: connected[0].pad, controller: dualShocks.first) {
-            detail += ", \(battery)"
-        }
-        if connected.count > 1 {
-            return LinkState(.pad, ok: true, detail: detail,
-                             hint: "Two pads are on. Stardew listens to the first one; if the wrong pad is in charge, hold PS on the other for ten seconds to turn it off.",
-                             brief: "Two pads on; the game takes the first")
-        }
-        return LinkState(.pad, ok: true, detail: detail)
+        let marks = paired.map { $0.pad.mark }.joined(separator: " and ")
+        return LinkState(.pad, ok: false, detail: "\(marks) paired, not connected",
+                         repair: .reconnectPad,
+                         hint: "Press PS once. If it blinks, connects, then drops: " + PadProbe.pairingHint,
+                         brief: "Press PS. Blinks then drops? " + PadProbe.pairingBrief)
     }
 }

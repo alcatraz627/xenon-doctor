@@ -37,15 +37,24 @@ mkdir -p "${APP_DIR}/Contents/MacOS"
 mkdir -p "${APP_DIR}/Contents/Resources"
 cp -f "${BIN_PATH}" "${APP_DIR}/Contents/MacOS/${APP_NAME}"
 cp -f Resources/Info.plist "${APP_DIR}/Contents/Info.plist"
-cp -f Resources/com.xenondoctor.steam-env.plist "${APP_DIR}/Contents/Resources/com.xenondoctor.steam-env.plist"
 cp -f Resources/pads.json "${APP_DIR}/Contents/Resources/pads.json"
 cp -f Resources/beanu-boss.png "${APP_DIR}/Contents/Resources/beanu-boss.png"
 if [[ -f Resources/AppIcon.icns ]]; then
     cp -f Resources/AppIcon.icns "${APP_DIR}/Contents/Resources/AppIcon.icns"
 fi
 
-# Ad-hoc sign so macOS does not refuse to launch an unsigned, quarantined bundle.
-codesign --force --sign - "${APP_DIR}" >/dev/null 2>&1 || true
+# Sign with the household's own certificate when the keychain has it (tools/signing-cert.sh
+# makes one), else ad hoc. The certificate is what lets macOS recognise the app as the
+# same app after an update, so the Accessibility switch the Undertale row needs stays
+# on; an ad-hoc signature changes with every build and the switch silently stops working.
+IDENTITY="${XENON_SIGN_IDENTITY:-Xenon Doctor}"
+if security find-identity -v -p codesigning 2>/dev/null | grep -q "\"${IDENTITY}\""; then
+    codesign --force --sign "${IDENTITY}" "${APP_DIR}" >/dev/null 2>&1 || codesign --force --sign - "${APP_DIR}" >/dev/null 2>&1 || true
+    echo "[build] signed as ${IDENTITY}"
+else
+    codesign --force --sign - "${APP_DIR}" >/dev/null 2>&1 || true
+    echo "[build] signed ad hoc (no '${IDENTITY}' certificate in the keychain)"
+fi
 
 echo "[build] OK -> ${APP_DIR}"
 

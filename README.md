@@ -5,13 +5,13 @@
 <h1 align="center">Xenon Doctor</h1>
 
 <p align="center">
-  A macOS menu bar app that keeps two Cosmic Byte Stratos Xenon gamepads working with Steam and Stardew Valley, and repairs a broken link with one click.
+  A macOS menu bar app that keeps two Cosmic Byte Stratos Xenon gamepads working with Steam, Stardew Valley, Factorio and Undertale, and repairs a broken link with one click.
 </p>
 
 <p align="center">
   <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%2014%2B-black">
   <img alt="Swift" src="https://img.shields.io/badge/Swift-5-F05138">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.3.2-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.3.4-blue">
   <img alt="Build" src="https://img.shields.io/badge/build-Command%20Line%20Tools%2C%20no%20Xcode-lightgrey">
 </p>
 
@@ -21,7 +21,7 @@
 
 Two Stratos Xenon pads, two MacBooks, one game. The pads worked some evenings and not others. A pad would blink and drop, or Steam would show it connected while the game saw a keyboard, and every bad evening ended in restarting Bluetooth, Steam, the game, or the Mac. One evening it ended with the power button.
 
-Xenon Doctor watches the four links a play session depends on: the Bluetooth radio, the pad, Steam, and the game. Each row in its menu is green, yellow with one button, or red with one sentence saying what to press. Its window has three tabs: the same rows with their full text and buttons, a button tester that draws the pad and ticks off each control, and the guide for this exact pad model. It writes the Steam settings that keep Steam out of the controller's way, because letting Steam handle these pads is what produced the keyboard mapping and the freeze, reads the pad's battery from the pad's own report, and updates itself from this repository's releases.
+Xenon Doctor watches the links a play session depends on: the Bluetooth radio, the pad, Steam, and one row per game. Each game row probes the path that game actually reads the pad through (Stardew through SDL, Factorio through Apple's GameController layer, Undertale through key presses Xenon Doctor makes for it), so a green row means the game can see the pad, not just that macOS can. Each row in its menu is green, yellow with one button, or red with one sentence saying what to press, and every button reads the whole chain again before any row goes green. Its window has three tabs: the same rows with their full text and buttons, a button tester that draws the pad and ticks off each control, and the guide for this exact pad model. It writes the Steam settings that keep Steam Input out of the games, because letting Steam handle these pads is what produced the keyboard mapping and the freeze, reads the pad's battery from the pad's own report, and updates itself from this repository's releases.
 
 It is built for one household and one pad model, on purpose. The pads are identified by pencil mark and Bluetooth address in a small registry file, so a third pad of the same model is one line, and nothing in it is generic.
 
@@ -46,8 +46,8 @@ cd xenon-doctor
 Command modes, useful from a terminal when the menu is not enough:
 
 ```bash
-XenonDoctor --status          # the four rows as text
-XenonDoctor --repair K        # powerOnRadio | reconnectPad | restartSteam | relaunchGame | applyPin
+XenonDoctor --status          # every row as text
+XenonDoctor --repair K        # one repair, then the whole chain again (--help lists the kinds)
 XenonDoctor --check-update    # compare this build with the latest GitHub release
 XenonDoctor --update          # install the latest release over this app and exit
 ```
@@ -58,7 +58,7 @@ Later installs never need the right-click step: the menu's update row downloads 
 
 | Document | Description |
 | --- | --- |
-| [How it works](docs/how-it-works.md) | the four-link chain, why Steam is kept out, what each repair does, source layout |
+| [How it works](docs/how-it-works.md) | the chain and the three input paths, why Steam Input is kept off, the Undertale key mapper, what each repair does, source layout |
 | [Process](docs/process.md) | build and ship, how the diagnosis was done, the clean test before a second Mac, how to resume |
 | [Logging](docs/logging.md) | which Steam and Bluetooth logs hold the truth and the lines that matter |
 | [Pad registry](docs/pads-registry.md) | the JSON file that names the pads, and how to add a third one without a rebuild |

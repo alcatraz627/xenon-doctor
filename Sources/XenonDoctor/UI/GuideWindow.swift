@@ -37,6 +37,8 @@ enum GuideWindow {
         .doThis("Turn on: press **PS** once. The light bar blinks, then goes solid within five seconds."),
         .doThis("Turn off: hold **PS** for about ten seconds until the light bar goes dark. Do this after closing the game."),
         .bullet("Launch Stardew Valley from Steam as usual. The game reads the pad directly."),
+        .bullet("Factorio reads the pad directly too, once its input method is set to game controller. The Factorio row sets it with one click."),
+        .bullet("Undertale cannot read a pad on a Mac. While Undertale is the front window, Xenon Doctor presses its keys for you: D-pad and left stick move, **Cross** is Z, **Circle** and **Square** are X, **Triangle** is C, **Options** is Enter. This needs the Accessibility switch on once; the Undertale row takes you there."),
 
         .h2("Pad blinks, shows connected, then drops"),
         .doThis("Hold **Share** and **PS** together for about four seconds until the light bar blinks fast, then let go. It connects and stays."),
@@ -45,7 +47,7 @@ enum GuideWindow {
 
         .h2("Two rules that keep it working"),
         .careful("Never use Steam's **Stop** button on a game. Quit the game from its own menu. The one time this Mac froze, Stop had just been used with a pad connected."),
-        .careful("Xenon Doctor keeps Steam away from the pad. If the Steam row ever says Steam has taken over, click **Restart Steam** and nothing else."),
+        .careful("Xenon Doctor keeps Steam Input off for the games. If the Steam row ever goes yellow, click **Fix Steam settings** and nothing else; Steam quits and comes back on its own within a minute."),
 
         .h2("Pairing a pad to a new Mac"),
         .doThis("Open System Settings, Bluetooth. Hold **Share** and **PS** on the pad until the light bar blinks fast. Click **Connect** next to the pad when it appears."),

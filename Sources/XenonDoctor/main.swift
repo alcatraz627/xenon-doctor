@@ -4,16 +4,27 @@ import AppKit
 // Xenon Doctor entry point. Three command modes for the terminal and tests, and the
 // menu bar app when launched with no arguments.
 //
-//   XenonDoctor --status            print the four links
-//   XenonDoctor --repair <kind>     run one repair: powerOnRadio reconnectPad restartSteam relaunchGame applyPin
+//   XenonDoctor --status            print every row
+//   XenonDoctor --repair <kind>     run one repair, then print the whole chain again
 //   XenonDoctor --self-test         exit 0 when the parser, pad lookup, and classifier pass
 //   XenonDoctor --unpin             test reset: remove the Steam keys and the launch agent
 
 let args = Array(CommandLine.arguments.dropFirst())
 
+/// Runs work on a background thread while the main run loop turns, and returns its result.
+func offMain<T>(_ work: @escaping () -> T) -> T {
+    PadProbe.prepare()
+    var out: T?
+    DispatchQueue.global(qos: .userInitiated).async { out = work() }
+    while out == nil { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+    return out!
+}
+
 switch args.first {
 case "--status":
-    let snap = Chain.standard().snapshot()
+    // GameController and the HID listener deliver on the main run loop, so the chain
+    // runs on another thread while this one keeps the loop turning, as the app does.
+    let snap = offMain { Chain.standard().snapshot() }
     print(snap.text)
     exit(snap.allOK ? 0 : 1)
 
@@ -22,9 +33,13 @@ case "--repair":
         print("usage: XenonDoctor --repair <\(RepairKind.allCases.map { $0.rawValue }.joined(separator: "|"))>")
         exit(2)
     }
-    let state = Repairs.make(kind).run()
-    print(ChainSnapshot(links: [state], takenAt: Date()).text)
-    exit(state.ok ? 0 : 1)
+    // The repair's own report first, then the whole chain read again: the exit code
+    // is the chain's, because a repair is judged by what it left behind.
+    let (state, chain) = offMain { Repairs.runAndReread(kind) }
+    print("repair: " + ChainSnapshot(links: [state], takenAt: Date()).text)
+    print("chain after:")
+    print(chain.text)
+    exit(chain.allOK ? 0 : 1)
 
 case "--self-test":
     exit(SelfTest.run())

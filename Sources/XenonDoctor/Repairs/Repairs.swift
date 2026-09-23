@@ -88,7 +88,7 @@ struct RestartSteam: Repair {
     }
 }
 
-/// Apply the pin: quit Steam if needed, write the keys, install the agent, relaunch.
+/// Apply the pin: quit Steam if needed, write the keys, relaunch.
 struct ApplyPin: Repair {
     let kind = RepairKind.applyPin
     func run() -> LinkState {
@@ -111,24 +111,62 @@ struct ApplyPin: Repair {
     }
 }
 
+/// Clear the old login-session block that hides the pad from SDL games.
+struct ClearPadBlock: Repair {
+    let kind = RepairKind.clearPadBlock
+    func run() -> LinkState {
+        Pin.heal()
+        return GameProbe(game: .stardew).read()
+    }
+}
+
 /// Ask the game to quit and wait for it, then launch it again through Steam.
 /// Never a kill signal while a window is up.
 struct RelaunchGame: Repair {
-    let kind = RepairKind.relaunchGame
-    func run() -> LinkState {
-        if let app = GameProbe.runningGame() {
-            app.terminate()
-            let deadline = Date().addingTimeInterval(20)
-            while Date() < deadline && GameProbe.runningGame() != nil { Thread.sleep(forTimeInterval: 0.5) }
-            if GameProbe.runningGame() != nil {
-                return LinkState(.game, ok: false, detail: "the game did not quit; save and exit from its menu", repair: .relaunchGame)
-            }
-        }
-        Shell.run("/usr/bin/open", ["steam://rungameid/\(GameProbe.steamAppID)"],
+    let game: Game
+    var kind: RepairKind { game.relaunch }
+
+    /// Asks the game to quit and waits; false when it is still up after the wait.
+    static func quit(_ game: Game, timeout: TimeInterval = 20) -> Bool {
+        guard let app = GameProbe.runningGame(game) else { return true }
+        app.terminate()
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline && GameProbe.runningGame(game) != nil { Thread.sleep(forTimeInterval: 0.5) }
+        return GameProbe.runningGame(game) == nil
+    }
+
+    static func launch(_ game: Game, wait: TimeInterval = 30) {
+        Shell.run("/usr/bin/open", ["steam://rungameid/\(game.steamAppID)"],
                   environment: ["PATH": "/usr/bin:/bin", "HOME": FileManager.default.homeDirectoryForCurrentUser.path])
-        let deadline = Date().addingTimeInterval(30)
-        while Date() < deadline && GameProbe.runningGame() == nil { Thread.sleep(forTimeInterval: 0.5) }
-        return GameProbe().read()
+        let deadline = Date().addingTimeInterval(wait)
+        while Date() < deadline && GameProbe.runningGame(game) == nil { Thread.sleep(forTimeInterval: 0.5) }
+    }
+
+    func run() -> LinkState {
+        guard RelaunchGame.quit(game) else {
+            return LinkState(game.link, ok: false, detail: "the game did not quit; save and exit from its menu", repair: kind)
+        }
+        RelaunchGame.launch(game)
+        return GameProbe(game: game).read()
+    }
+}
+
+/// Set Factorio's input method to game controller. Factorio rewrites its config when it
+/// quits, so a running Factorio is asked to quit first (it offers to save), then relaunched.
+struct EnableFactorioPad: Repair {
+    let kind = RepairKind.enableFactorioPad
+    func run() -> LinkState {
+        let wasRunning = GameProbe.runningGame(.factorio) != nil
+        guard RelaunchGame.quit(.factorio) else {
+            return LinkState(.factorio, ok: false, detail: "Factorio did not quit; save and exit from its menu, then try again", repair: kind)
+        }
+        do {
+            try FactorioConfig.enableController()
+        } catch {
+            return LinkState(.factorio, ok: false, detail: "could not change the setting: \(error)", repair: kind)
+        }
+        if wasRunning { RelaunchGame.launch(.factorio) }
+        return GameProbe(game: .factorio).read()
     }
 }
 
@@ -142,20 +180,28 @@ struct GoThere: Repair {
         switch kind {
         case .openBluetoothPrivacy:
             return URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth")!
+        case .openAccessibility:
+            return URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
         case .installSteam:
             return URL(string: "https://store.steampowered.com/about/")!
         default:
-            return URL(string: "steam://install/\(GameProbe.steamAppID)")!
+            let id = Game.forInstall(kind)?.steamAppID ?? Game.stardew.steamAppID
+            return URL(string: "steam://install/\(id)")!
         }
     }
 
     func run() -> LinkState {
-        NSWorkspace.shared.open(url)
+        if kind == .openAccessibility {
+            KeyMapper.requestTrust()
+        } else {
+            NSWorkspace.shared.open(url)
+        }
         Thread.sleep(forTimeInterval: 1.5)
         switch kind {
         case .openBluetoothPrivacy: return RadioProbe().read()
+        case .openAccessibility: return GameProbe(game: .undertale).read()
         case .installSteam: return SteamProbe().read()
-        default: return GameProbe().read()
+        default: return GameProbe(game: Game.forInstall(kind) ?? .stardew).read()
         }
     }
 }
@@ -166,9 +212,20 @@ enum Repairs {
         case .powerOnRadio: return PowerOnRadio()
         case .reconnectPad: return ReconnectPad()
         case .restartSteam: return RestartSteam()
-        case .relaunchGame: return RelaunchGame()
         case .applyPin: return ApplyPin()
-        case .openBluetoothPrivacy, .installSteam, .installGame: return GoThere(kind: kind)
+        case .clearPadBlock: return ClearPadBlock()
+        case .relaunchGame, .relaunchFactorio, .relaunchUndertale: return RelaunchGame(game: Game.forRelaunch(kind) ?? .stardew)
+        case .enableFactorioPad: return EnableFactorioPad()
+        case .openBluetoothPrivacy, .openAccessibility, .installSteam, .installGame, .installFactorio, .installUndertale: return GoThere(kind: kind)
         }
+    }
+
+    /// Runs one repair, then reads the whole chain again. A repair is judged by the chain
+    /// after it, never by its own report: the row it touched may be fine while the fix
+    /// broke or exposed another, and only the full re-read shows that.
+    static func runAndReread(_ kind: RepairKind) -> (repaired: LinkState, chain: ChainSnapshot) {
+        let own = make(kind).run()
+        let chain = Chain.standard().snapshot(fresh: true)
+        return (own, chain)
     }
 }

@@ -3,7 +3,8 @@
 ## Build and ship
 
 ```
-./build.sh              compile and assemble XenonDoctor.app (ad-hoc signed)
+./build.sh              compile and assemble XenonDoctor.app, signed with the "Xenon Doctor" certificate when the keychain has it, else ad hoc
+tools/signing-cert.sh   make that certificate once on the building Mac; it is what keeps the Accessibility switch valid across updates
 ./release.sh            build and zip; the zip is what goes to the other Mac
 tools/makeicon.sh       regenerate Resources/AppIcon.icns
 .build/release/XenonDoctor --self-test
@@ -11,7 +12,7 @@ tools/makeicon.sh       regenerate Resources/AppIcon.icns
 
 The machine has Command Line Tools only, no Xcode, so there is no XCTest target. `--self-test` is the regression net and must pass before a release.
 
-On the receiving Mac: unzip, drag to Applications, right-click, Open, Open once. The app is ad-hoc signed and not notarized.
+On the receiving Mac: unzip, drag to Applications, right-click, Open, Open once. The app is self-signed and not notarized.
 
 Publishing, once the owner has looked at the build:
 

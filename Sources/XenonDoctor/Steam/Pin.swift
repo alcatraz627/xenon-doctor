@@ -1,15 +1,15 @@
 import Foundation
 
-/// The Steam settings that keep Steam out of the controller's way, and the launch agent
-/// that keeps Steam's hands off the pad. Measured on 2026-09-05; see pin.md in the plan.
+/// The Steam settings that keep Steam Input out of the games and the Home button away from
+/// Steam. Measured on 2026-09-05; see pin.md in the plan. Each game gets its own
+/// force-off key so the pin holds even if the global switch is ever flipped back.
 enum Pin {
     /// Paths under UserLocalConfigStore in localconfig.vdf, with the value each must hold.
     static let keys: [([String], String)] = [
         (["SteamController_PSSupport"], "0"),
         (["Controller_CheckGuideButton"], "0"),
         (["SteamController_Enable_Chord"], "0"),
-        (["apps", GameProbe.steamAppID, "UseSteamControllerConfig"], "0"),
-    ]
+    ] + Game.all.map { (["apps", $0.steamAppID, "UseSteamControllerConfig"], "0") }
 
     static let agentLabel = "com.xenondoctor.steam-env"
     static var agentURL: URL {
@@ -44,7 +44,7 @@ enum Pin {
         }
     }
 
-    /// Writes the four keys with a timestamped backup beside the file. Refuses while Steam runs.
+    /// Writes the pinned keys with a timestamped backup beside the file. Refuses while Steam runs.
     static func applyKeys() throws {
         guard SteamProbe.runningSteam() == nil else { throw ApplyError.steamRunning }
         guard let url = SteamPaths.localConfig() else { throw ApplyError.noConfig }
@@ -67,8 +67,8 @@ enum Pin {
     }
 
     /// Test helper: puts Steam and the login session back to how a fresh Mac looks.
-    /// Removes the four keys (with a backup), unloads and deletes the agent, clears the
-    /// variable from the login session. Refuses while Steam runs, like applyKeys.
+    /// Removes the pinned keys (with a backup), unloads and deletes the old agent, clears
+    /// the variable from the login session. Refuses while Steam runs, like applyKeys.
     static func unpin() throws {
         guard SteamProbe.runningSteam() == nil else { throw ApplyError.steamRunning }
         guard let url = SteamPaths.localConfig() else { throw ApplyError.noConfig }

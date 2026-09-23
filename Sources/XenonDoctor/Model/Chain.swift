@@ -39,9 +39,10 @@ enum Severity: Int, Comparable {
     }
 }
 
-/// The four links a game session depends on, in the order a person would check them.
+/// The links a game session depends on, in the order a person would check them: the
+/// three shared ones, then one row per game.
 enum Link: String, CaseIterable {
-    case radio, pad, steam, game
+    case radio, pad, steam, game, factorio, undertale
 
     var title: String {
         switch self {
@@ -49,33 +50,45 @@ enum Link: String, CaseIterable {
         case .pad: return "Controller"
         case .steam: return "Steam"
         case .game: return "Stardew Valley"
+        case .factorio: return "Factorio"
+        case .undertale: return "Undertale"
         }
     }
+
+    var isGame: Bool { self == .game || self == .factorio || self == .undertale }
 }
 
-/// A button the app can offer. The first five repair something; the last three take the
-/// person to the one place where the fix lives, because the app cannot do it for them.
+/// A button the app can offer. Most repair something; the go-there ones open the one
+/// place where the fix lives, because the app cannot do it for the person.
 enum RepairKind: String, CaseIterable {
-    case powerOnRadio, reconnectPad, restartSteam, relaunchGame, applyPin
-    case openBluetoothPrivacy, installSteam, installGame
+    case powerOnRadio, reconnectPad, restartSteam, applyPin, clearPadBlock
+    case relaunchGame, relaunchFactorio, relaunchUndertale, enableFactorioPad
+    case openBluetoothPrivacy, openAccessibility, installSteam, installGame, installFactorio, installUndertale
 
     var title: String {
         switch self {
         case .powerOnRadio: return "Turn Bluetooth on"
         case .reconnectPad: return "Reconnect controller"
         case .restartSteam: return "Restart Steam"
-        case .relaunchGame: return "Relaunch Stardew Valley"
         case .applyPin: return "Fix Steam settings"
+        case .clearPadBlock: return "Clear the stale controller block"
+        case .relaunchGame: return "Relaunch Stardew Valley"
+        case .relaunchFactorio: return "Relaunch Factorio"
+        case .relaunchUndertale: return "Relaunch Undertale"
+        case .enableFactorioPad: return "Turn on Factorio's controller setting"
         case .openBluetoothPrivacy: return "Open Bluetooth privacy settings"
+        case .openAccessibility: return "Allow Xenon Doctor to press keys"
         case .installSteam: return "Get Steam"
         case .installGame: return "Install Stardew Valley in Steam"
+        case .installFactorio: return "Install Factorio in Steam"
+        case .installUndertale: return "Install Undertale in Steam"
         }
     }
 
     /// True for the buttons that open a window elsewhere and leave the person to finish.
     var goesThere: Bool {
         switch self {
-        case .openBluetoothPrivacy, .installSteam, .installGame: return true
+        case .openBluetoothPrivacy, .openAccessibility, .installSteam, .installGame, .installFactorio, .installUndertale: return true
         default: return false
         }
     }
@@ -120,7 +133,9 @@ struct LinkState {
         case .radio: return "Bluetooth"
         case .pad: return detail.hasPrefix("no ") ? "pair pad" : "pad off"
         case .steam: return "Steam"
-        case .game: return "game"
+        case .game: return "Stardew"
+        case .factorio: return "Factorio"
+        case .undertale: return "Undertale"
         }
     }
 
@@ -142,17 +157,20 @@ struct ChainSnapshot {
     var worst: LinkState? { links.max { $0.severity < $1.severity }.flatMap { $0.ok ? nil : $0 } }
     var severity: Severity { links.map { $0.severity }.max() ?? .fine }
 
-    /// Every link fine and the game up: the one moment the app has nothing left to say.
+    /// Every link fine and a game up: the one moment the app has nothing left to say.
     var playing: Bool {
-        allOK && links.contains { $0.link == .game && $0.detail.hasPrefix("running") }
+        allOK && links.contains { $0.link.isGame && $0.detail.hasPrefix("running") }
     }
     static let playingLine = "Choppa da Wood (enjoy the game)"
+
+    /// The row for one link, when the snapshot has it.
+    func state(_ link: Link) -> LinkState? { links.first { $0.link == link } }
 
     /// One line per link, the shape `--status` prints.
     var text: String {
         links.map { s in
             let mark = s.ok ? "ok  " : "FIX "
-            var line = "\(s.link.rawValue.padding(toLength: 6, withPad: " ", startingAt: 0)) \(mark) \(s.detail)"
+            var line = "\(s.link.rawValue.padding(toLength: 9, withPad: " ", startingAt: 0)) \(mark) \(s.detail)"
             if let r = s.repair { line += "  [\(r.title)]" }
             if let h = s.hint { line += "\n       \(h)" }
             return line
@@ -176,7 +194,7 @@ struct Chain {
     let probes: [Probe]
 
     static func standard() -> Chain {
-        Chain(probes: [RadioProbe(), PadProbe(), SteamProbe(), GameProbe()])
+        Chain(probes: [RadioProbe(), PadProbe(), SteamProbe()] + Game.all.map { GameProbe(game: $0) })
     }
 
     /// Probes that are still running from an earlier snapshot. A system call that never
@@ -187,8 +205,20 @@ struct Chain {
     private static let lock = NSLock()
     static let probeTimeout: TimeInterval = 6
 
-    func snapshot() -> ChainSnapshot {
+    /// `fresh` waits for any probe still running from an earlier cycle, so every row in
+    /// the result is a new reading. Used after a repair; the timer's cycles do not wait.
+    func snapshot(fresh: Bool = false) -> ChainSnapshot {
         if ProcessInfo.processInfo.environment["XENON_DEMO"] == "playing" { return Chain.demoPlaying }
+        if fresh {
+            let deadline = Date().addingTimeInterval(Chain.probeTimeout)
+            while Date() < deadline {
+                Chain.lock.lock()
+                let busy = !Chain.inFlight.isEmpty
+                Chain.lock.unlock()
+                if !busy { break }
+                Thread.sleep(forTimeInterval: 0.2)
+            }
+        }
         let group = DispatchGroup()
         var fresh = [Link: LinkState]()
         for p in probes {
@@ -242,7 +272,9 @@ struct Chain {
     static let demoPlaying = ChainSnapshot(links: [
         LinkState(.radio, ok: true, detail: "on"),
         LinkState(.pad, ok: true, detail: "SQUARE connected, battery 85%"),
-        LinkState(.steam, ok: true, detail: "running, leaving the controller to the game"),
+        LinkState(.steam, ok: true, detail: "running, Steam Input off for the games"),
         LinkState(.game, ok: true, detail: "running"),
+        LinkState(.factorio, ok: true, detail: "not running", idle: true),
+        LinkState(.undertale, ok: true, detail: "not running", idle: true),
     ], takenAt: Date())
 }

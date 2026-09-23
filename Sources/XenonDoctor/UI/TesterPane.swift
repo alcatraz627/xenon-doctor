@@ -84,16 +84,23 @@ final class TesterPane: NSView {
     required init?(coder: NSCoder) { fatalError("not used") }
 
     func start() {
-        GCController.startWirelessControllerDiscovery { }
-        PadBattery.shared.start()
+        Trace.log("tester start: controllers=\(GCController.controllers().count) visible=\(window?.isVisible ?? false) superview=\(superview != nil)")
+        PadProbe.prepare()
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in self?.tick() }
     }
 
     @objc private func resetChecks() { readings.reset() }
 
+    private var ticks = 0
+
     private func tick() {
-        guard window?.isVisible == true, !isHidden, superview != nil else { timer?.invalidate(); return }
+        ticks += 1
+        if ticks % 30 == 1 {
+            let all = GCController.controllers()
+            Trace.log("tester tick \(ticks): controllers=\(all.count) extended=\(all.filter { $0.extendedGamepad != nil }.count) visible=\(window?.isVisible ?? false) hidden=\(isHidden) superview=\(superview != nil) main=\(Thread.isMainThread)")
+        }
+        guard window?.isVisible == true, !isHidden, superview != nil else { Trace.log("tester tick: stopping"); timer?.invalidate(); return }
         var controller: GCController?
         if let c = GCController.controllers().first(where: { $0.extendedGamepad != nil }) {
             readings.update(from: c)
@@ -103,16 +110,25 @@ final class TesterPane: NSView {
         }
         scene.apply()
         warning.isHidden = readings.connected
+        // Same words as the Status row for the same state, from the same HID list.
+        if !readings.connected {
+            let pads = PadBattery.shared.attachedPads()
+            warning.stringValue = pads.isEmpty ? "No controller reaching the Mac"
+                : "\(pads.map { $0.mark }.joined(separator: " and ")) connected, but macOS is not reading it"
+        }
         updateCard(controller)
         checks.attributedStringValue = checklist()
     }
 
     // MARK: device card
 
-    /// Which known pad is connected, from the pad probe's last reading. Never asks
-    /// IOBluetooth from here: that call can block the main thread for good.
+    /// Which known pad is connected: the HID layer's answer, the same one the Status row
+    /// uses. Never asks IOBluetooth from here: that call can block the main thread for good.
     private func connectedPad() -> PadProbe.Seen? {
-        PadProbe.latest.first { $0.connected }
+        if let pad = PadBattery.shared.attachedPads().first {
+            return PadProbe.latest.first { $0.pad.mark == pad.mark } ?? PadProbe.Seen(pad: pad, connected: true, name: "", rssi: 127)
+        }
+        return nil
     }
 
     private func updateCard(_ controller: GCController?) {
@@ -129,7 +145,7 @@ final class TesterPane: NSView {
             title = "\(pad.mark) pad"
             if let note = pad.note { title += "  ·  \(note)" }
             rows.append(("Address", pad.mac))
-            rows.append(("Paired as", seen.name.isEmpty ? "—" : seen.name))
+            if !seen.name.isEmpty { rows.append(("Paired as", seen.name)) }
             let rssi = seen.rssi
             if rssi != 127 && rssi != 0 { rows.append(("Signal", "\(rssi) dBm" + (rssi > -60 ? ", strong" : rssi > -75 ? ", fine" : ", weak"))) }
             if let b = PadBattery.shared.reading(forMAC: pad.mac) {

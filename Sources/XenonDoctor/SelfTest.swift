@@ -81,6 +81,46 @@ enum SelfTest {
         check("daily: same day in the morning", cal.isDate(fromMorning, inSameDayAs: morning))
         check("daily: next day in the evening", !cal.isDate(fromEvening, inSameDayAs: evening) && fromEvening > evening)
 
+        // Factorio config: the commented default is replaced in place, a set value is read
+        // back, a file with no [input] section gets one, and the write is idempotent.
+        let ini = "[graphics]\n; fullscreen=true\n\n[input]\n; Options: keyboard-and-mouse, game-controller\n; input-method=keyboard-and-mouse\n\n; mouse-sensitivity=1\n\n[controls]\n; move=\n"
+        check("factorio: default reads as unset", FactorioConfig.value(in: ini) == nil)
+        let set = FactorioConfig.setting(ini, to: "game-controller")
+        check("factorio: set reads back", FactorioConfig.value(in: set) == "game-controller")
+        check("factorio: replaced in place", set.contains("[input]\n; Options: keyboard-and-mouse, game-controller\ninput-method=game-controller\n\n; mouse-sensitivity=1"))
+        check("factorio: other sections untouched", set.hasPrefix("[graphics]\n; fullscreen=true\n") && set.hasSuffix("[controls]\n; move=\n"))
+        check("factorio: idempotent", FactorioConfig.setting(set, to: "game-controller") == set)
+        check("factorio: no section", FactorioConfig.value(in: FactorioConfig.setting("[graphics]\n; a=b\n", to: "game-controller")) == "game-controller")
+        check("factorio: key outside [input] ignored", FactorioConfig.value(in: "[other]\ninput-method=game-controller\n") == nil)
+
+        // Pad block: the variable set in a process environment line, and the cleared form.
+        check("block: set", PadBlock.blocked(inEnvironmentLine: "/x/Game HOME=/Users/a SDL_GAMECONTROLLER_IGNORE_DEVICES=0x054c/0x09cc PATH=/usr/bin"))
+        check("block: absent", !PadBlock.blocked(inEnvironmentLine: "/x/Game HOME=/Users/a PATH=/usr/bin"))
+        check("block: empty value", !PadBlock.blocked(inEnvironmentLine: "/x/Game SDL_GAMECONTROLLER_IGNORE_DEVICES= PATH=/usr/bin"))
+
+        // Key mapper: Undertale's keys from the pad's state; the stick and the D-pad both move.
+        func keys(dpad: (Bool, Bool, Bool, Bool) = (false, false, false, false), stick: (Float, Float) = (0, 0),
+                  cross: Bool = false, circle: Bool = false, square: Bool = false, triangle: Bool = false, options: Bool = false) -> Set<KeyMapper.Key> {
+            KeyMapper.keys(dpadUp: dpad.0, dpadDown: dpad.1, dpadLeft: dpad.2, dpadRight: dpad.3, stickX: stick.0, stickY: stick.1,
+                           cross: cross, circle: circle, square: square, triangle: triangle, options: options)
+        }
+        check("mapper: idle is empty", keys().isEmpty)
+        check("mapper: cross is Z", keys(cross: true) == [.z])
+        check("mapper: circle and square are X", keys(circle: true) == [.x] && keys(square: true) == [.x])
+        check("mapper: triangle is C", keys(triangle: true) == [.c])
+        check("mapper: options is Enter", keys(options: true) == [.enter])
+        check("mapper: dpad up", keys(dpad: (true, false, false, false)) == [.up])
+        check("mapper: stick right", keys(stick: (0.8, 0)) == [.right])
+        check("mapper: stick inside deadzone", keys(stick: (0.3, -0.3)).isEmpty)
+        check("mapper: diagonal", keys(stick: (-0.7, 0.7)) == [.left, .up])
+        check("mapper: chord", keys(dpad: (false, true, false, false), cross: true) == [.down, .z])
+
+        // Game descriptors: every game has a row, a relaunch and an install button, and a pin key.
+        check("games: rows", Game.all.map { $0.link } == [.game, .factorio, .undertale])
+        check("games: repairs resolve", Game.all.allSatisfy { Game.forRelaunch($0.relaunch) != nil && Game.forInstall($0.install) != nil })
+        check("games: pinned", Game.all.allSatisfy { g in Pin.keys.contains { $0.0 == ["apps", g.steamAppID, "UseSteamControllerConfig"] && $0.1 == "0" } })
+        check("games: playing on any game", ChainSnapshot(links: [LinkState(.factorio, ok: true, detail: "running, reading the pad directly")], takenAt: Date()).playing)
+
         // Chain text: a broken link prints its button.
         let snap = ChainSnapshot(links: [
             LinkState(.radio, ok: true, detail: "on"),

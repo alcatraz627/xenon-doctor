@@ -19,9 +19,10 @@ enum SteamPaths {
     }
 }
 
-/// Is Steam installed, is it running, are its controller settings pinned, and has it kept
-/// its hands off the pad since it started. A Steam that opened the pad is the state that
-/// preceded the freeze, so it is reported as broken even though games may still work.
+/// Is Steam installed, is it running, and are its controller settings pinned. The verdict
+/// rests only on the keys the Fix button writes. Whether Steam has opened the pad for its
+/// own windows is shown as a note, never as breakage: measured 2026-09-05, the keys do not
+/// stop that open, so no button here could change it, and the games read the pad directly.
 struct SteamProbe: Probe {
     let link = Link.steam
 
@@ -63,14 +64,14 @@ struct SteamProbe: Probe {
             }
             return LinkState(.steam, ok: true, detail: "not running (starts with the game)", idle: true)
         }
-        let pinned = Pin.check().isEmpty
-        let opened = SteamProbe.openedPad(since: app.launchDate ?? .distantPast)
-        if pinned && !opened {
-            return LinkState(.steam, ok: true, detail: "running, leaving the controller to the game")
-        }
-        if !pinned {
+        if !Pin.check().isEmpty {
             return LinkState(.steam, ok: false, detail: "running with the wrong controller settings", repair: .applyPin)
         }
-        return LinkState(.steam, ok: false, detail: "has taken over the controller", repair: .restartSteam)
+        if SteamProbe.openedPad(since: app.launchDate ?? .distantPast) {
+            return LinkState(.steam, ok: true, detail: "running, Steam Input off for the games",
+                             hint: "Steam has the pad open for its own windows, which the settings cannot stop. The games read the pad directly, so this changes nothing for them.",
+                             brief: "Steam uses the pad for its own windows only")
+        }
+        return LinkState(.steam, ok: true, detail: "running, Steam Input off for the games")
     }
 }
