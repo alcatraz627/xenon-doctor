@@ -33,10 +33,17 @@ struct GameProbe: Probe {
     static func steamThinksRunning(_ game: Game) -> Bool {
         let log = SteamPaths.logs.appendingPathComponent("gameprocess_log.txt")
         guard let text = try? String(contentsOf: log, encoding: .utf8) else { return false }
+        return steamThinksRunning(in: text, appID: game.steamAppID)
+    }
+
+    /// Steam's logs end lines with CR LF, which Swift reads as one character, so the split
+    /// is on any newline; splitting on "\n" made the whole file one line and the launch
+    /// and exit markers cancelled out.
+    static func steamThinksRunning(in text: String, appID: String) -> Bool {
         var running = false
-        for line in text.split(separator: "\n") where line.contains("AppID \(game.steamAppID)") {
-            if line.contains("adding PID") || line.contains("Game process added") { running = true }
-            if line.contains("Remove \(game.steamAppID) from running list") { running = false }
+        for line in text.split(whereSeparator: { $0.isNewline }) {
+            if line.contains("AppID \(appID) adding PID") || line.contains("AppID \(appID)") && line.contains("Game process added") { running = true }
+            if line.contains("Remove \(appID) from running list") { running = false }
         }
         return running
     }

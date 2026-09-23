@@ -93,6 +93,14 @@ enum SelfTest {
         check("factorio: no section", FactorioConfig.value(in: FactorioConfig.setting("[graphics]\n; a=b\n", to: "game-controller")) == "game-controller")
         check("factorio: key outside [input] ignored", FactorioConfig.value(in: "[other]\ninput-method=game-controller\n") == nil)
 
+        // Steam's process log, with the CR LF endings Steam writes: a launch then an exit
+        // is not running; a launch after an exit is.
+        let gp = "[t] AppID 427520 adding PID 1 as a tracked process\r\n[t] Remove 427520 from running list\r\n[t] AppID 413150 adding PID 2 as a tracked process\r\n"
+        check("steam log: exited game not running", !GameProbe.steamThinksRunning(in: gp, appID: "427520"))
+        check("steam log: launched game running", GameProbe.steamThinksRunning(in: gp, appID: "413150"))
+        check("steam log: relaunch running", GameProbe.steamThinksRunning(in: gp + "[t] AppID 427520 adding PID 3 as a tracked process\r\n", appID: "427520"))
+        check("steam log: unknown game", !GameProbe.steamThinksRunning(in: gp, appID: "391540"))
+
         // Pad block: the variable set in a process environment line, and the cleared form.
         check("block: set", PadBlock.blocked(inEnvironmentLine: "/x/Game HOME=/Users/a SDL_GAMECONTROLLER_IGNORE_DEVICES=0x054c/0x09cc PATH=/usr/bin"))
         check("block: absent", !PadBlock.blocked(inEnvironmentLine: "/x/Game HOME=/Users/a PATH=/usr/bin"))

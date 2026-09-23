@@ -19,7 +19,7 @@ enum FactorioConfig {
     /// commented out, which Factorio treats as its default, keyboard and mouse.
     static func value(in text: String) -> String? {
         var inInput = false
-        for raw in text.split(separator: "\n", omittingEmptySubsequences: false) {
+        for raw in text.split(omittingEmptySubsequences: false, whereSeparator: { $0.isNewline }) {
             let line = raw.trimmingCharacters(in: .whitespaces)
             if line.hasPrefix("[") { inInput = line == "[input]"; continue }
             guard inInput, !line.hasPrefix(";"), let eq = line.firstIndex(of: "=") else { continue }

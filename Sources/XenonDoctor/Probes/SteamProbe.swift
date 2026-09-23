@@ -40,7 +40,8 @@ struct SteamProbe: Probe {
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd HH:mm:ss"
         fmt.timeZone = .current
-        for line in text.split(separator: "\n").reversed() {
+        // Steam's logs end lines with CR LF; split on any newline or the file is one line.
+        for line in text.split(whereSeparator: { $0.isNewline }).reversed() {
             guard line.contains("Controller 0 connected, configuring it now") else { continue }
             let stamp = line.dropFirst().prefix(19)
             if let d = fmt.date(from: String(stamp)) {
