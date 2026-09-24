@@ -36,16 +36,28 @@ final class KeyMapper {
 
     var isFront: Bool { NSWorkspace.shared.frontmostApplication?.bundleIdentifier == Game.undertale.bundleID }
 
-    /// Hooks every pad that is or becomes connected. Safe to call more than once.
+    /// Listens to the pad's own reports (the same source as the Status row and the
+    /// tester), with macOS's game controller layer as a fallback. Safe to call twice.
     func start() {
         guard !started else { return }
         started = true
+        PadBattery.shared.onState = { [weak self] _, s in
+            self?.apply(KeyMapper.keys(dpadUp: s.buttons.contains("up"), dpadDown: s.buttons.contains("down"),
+                                       dpadLeft: s.buttons.contains("left"), dpadRight: s.buttons.contains("right"),
+                                       stickX: s.leftX, stickY: s.leftY,
+                                       cross: s.buttons.contains("cross"), circle: s.buttons.contains("circle"),
+                                       square: s.buttons.contains("square"), triangle: s.buttons.contains("triangle"),
+                                       options: s.buttons.contains("options")))
+        }
         for c in GCController.controllers() { hook(c) }
         NotificationCenter.default.addObserver(forName: .GCControllerDidConnect, object: nil, queue: .main) { [weak self] n in
             if let c = n.object as? GCController { self?.hook(c) }
         }
         NotificationCenter.default.addObserver(forName: .GCControllerDidDisconnect, object: nil, queue: .main) { [weak self] _ in
             self?.releaseAll()
+        }
+        NotificationCenter.default.addObserver(forName: PadBattery.padsChanged, object: nil, queue: .main) { [weak self] _ in
+            if !PadBattery.shared.anyAttached { self?.releaseAll() }
         }
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] _ in
             guard let self = self, !self.isFront else { return }
@@ -56,6 +68,8 @@ final class KeyMapper {
     private func hook(_ c: GCController) {
         guard let pad = c.extendedGamepad else { return }
         pad.valueChangedHandler = { [weak self] pad, _ in
+            // The report path wins while it is alive; this only fills in when it is not.
+            guard PadBattery.shared.latestState() == nil else { return }
             self?.apply(KeyMapper.keys(for: pad))
         }
     }

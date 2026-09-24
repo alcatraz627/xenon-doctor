@@ -28,6 +28,25 @@ final class PadReadings {
         leftRestMin = 1; rightRestMin = 1
     }
 
+    /// From the pad's own report, the source every surface now shares.
+    func update(from s: PadBattery.State, pad: KnownPad?) {
+        connected = true
+        name = pad.map { "\($0.mark) pad" } ?? "Stratos Xenon"
+        battery = -1
+        pressed = s.buttons
+        seen.formUnion(s.buttons)
+        leftTrigger = s.leftTrigger; rightTrigger = s.rightTrigger
+        leftTriggerMax = max(leftTriggerMax, leftTrigger); rightTriggerMax = max(rightTriggerMax, rightTrigger)
+        if leftTrigger > 0.5 { seen.insert("L2") }
+        if rightTrigger > 0.5 { seen.insert("R2") }
+        leftStick = CGPoint(x: CGFloat(s.leftX), y: CGFloat(s.leftY))
+        rightStick = CGPoint(x: CGFloat(s.rightX), y: CGFloat(s.rightY))
+        let lm = hypot(leftStick.x, leftStick.y), rm = hypot(rightStick.x, rightStick.y)
+        leftStickMaxMag = max(leftStickMaxMag, lm); rightStickMaxMag = max(rightStickMaxMag, rm)
+        leftRestMin = min(leftRestMin, lm); rightRestMin = min(rightRestMin, rm)
+    }
+
+    /// From macOS's game controller layer, kept as the fallback when no report has come.
     func update(from c: GCController) {
         connected = true
         name = c.vendorName ?? "controller"

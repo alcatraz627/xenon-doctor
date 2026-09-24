@@ -79,6 +79,12 @@ struct PadProbe: Probe {
             if PadBattery.shared.anyAttached || !GCController.controllers().isEmpty { break }
             Thread.sleep(forTimeInterval: 0.2)
         }
+        // The game controller layer can trail the HID layer by several seconds on a cold
+        // process; give it that long before calling the pad unread.
+        let gcDeadline = Date().addingTimeInterval(wait * 2)
+        while PadBattery.shared.anyAttached && GCController.controllers().isEmpty && Date() < gcDeadline {
+            Thread.sleep(forTimeInterval: 0.25)
+        }
         return (PadBattery.shared.attachedPads(), PadBattery.shared.anyAttached, GCController.controllers())
     }
 
@@ -96,8 +102,12 @@ struct PadProbe: Probe {
                                  brief: "Wrong mode: turn off, then Share + PS")
             }
             if dualShocks.isEmpty {
-                return LinkState(.pad, ok: false, detail: "\(marks) connected but macOS is not reading it",
-                                 repair: .reconnectPad, hint: PadProbe.pairingHint, brief: PadProbe.pairingBrief)
+                // The pad's reports reach this app, so Stardew and Undertale are fine; only
+                // Factorio reads through the layer that has not picked the pad up.
+                return LinkState(.pad, ok: false, detail: "\(marks) connected, but macOS's game layer has not picked it up",
+                                 repair: .reconnectPad,
+                                 hint: "The pad reaches the Mac (the tester works), but the layer Factorio reads through has not noticed it. Reconnect puts it back; Stardew and Undertale are unaffected.",
+                                 brief: "Factorio's layer missed it; Reconnect fixes")
             }
             var detail = "\(marks) connected"
             if now.pads.count == 1, let battery = PadProbe.batteryText(for: now.pads[0], controller: dualShocks.first) {

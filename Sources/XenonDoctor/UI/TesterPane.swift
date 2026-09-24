@@ -101,12 +101,17 @@ final class TesterPane: NSView {
             Trace.log("tester tick \(ticks): controllers=\(all.count) extended=\(all.filter { $0.extendedGamepad != nil }.count) visible=\(window?.isVisible ?? false) hidden=\(isHidden) superview=\(superview != nil) main=\(Thread.isMainThread)")
         }
         guard window?.isVisible == true, !isHidden, superview != nil else { Trace.log("tester tick: stopping"); timer?.invalidate(); return }
-        var controller: GCController?
-        if let c = GCController.controllers().first(where: { $0.extendedGamepad != nil }) {
+        // The pad's own report first; macOS's game controller layer only as a fallback.
+        var controller: GCController? = GCController.controllers().first(where: { $0.extendedGamepad != nil })
+        if let pad = PadBattery.shared.attachedPads().first, let s = PadBattery.shared.state(forMAC: pad.mac) {
+            readings.update(from: s, pad: pad)
+        } else if let s = PadBattery.shared.latestState() {
+            readings.update(from: s, pad: nil)
+        } else if let c = controller {
             readings.update(from: c)
-            controller = c
         } else {
             readings.connected = false
+            controller = nil
         }
         scene.apply()
         warning.isHidden = readings.connected
@@ -132,14 +137,14 @@ final class TesterPane: NSView {
     }
 
     private func updateCard(_ controller: GCController?) {
-        guard readings.connected, let c = controller else {
+        guard readings.connected else {
             card.isHidden = true
             lastCardKey = ""
             return
         }
         let found = connectedPad()
         var rows: [(String, String)] = []
-        var title = c.vendorName ?? "Controller"
+        var title = controller?.vendorName ?? "Stratos Xenon"
         if let seen = found {
             let pad = seen.pad
             title = "\(pad.mark) pad"
@@ -158,16 +163,23 @@ final class TesterPane: NSView {
         } else {
             rows.append(("Address", "not one of the registered pads"))
         }
-        rows.append(("Link", "Bluetooth, read by the game directly; Steam ignores it"))
-        rows.append(("macOS sees", "\(c.vendorName ?? "controller"), \(c.productCategory)"))
-        if let ds = c.extendedGamepad as? GCDualShockGamepad, ds.touchpadButton.isPressed == false {
-            rows.append(("Layout", "DualShock 4: sticks, D-pad, four faces, L1 L2 R1 R2, Share, Options, PS, touchpad"))
+        rows.append(("Link", "Bluetooth, read by the game directly; Steam Input off"))
+        if let c = controller {
+            rows.append(("macOS sees", "\(c.vendorName ?? "controller"), \(c.productCategory)"))
+        } else {
+            rows.append(("macOS sees", "not yet in the game controller layer; Factorio needs that, Stardew and Undertale do not"))
         }
+        rows.append(("Layout", "DualShock 4: sticks, D-pad, four faces, L1 L2 R1 R2, Share, Options, PS, touchpad"))
         let key = title + rows.map { $0.0 + $0.1 }.joined()
         guard key != lastCardKey else { return }
         lastCardKey = key
         cardTitle.stringValue = title
-        while cardGrid.numberOfRows > 0 { cardGrid.removeRow(at: 0) }
+        // removeRow leaves the cell views in place; take them out or rows pile up.
+        while cardGrid.numberOfRows > 0 {
+            let row = cardGrid.row(at: 0)
+            for i in 0..<row.numberOfCells { row.cell(at: i).contentView?.removeFromSuperview() }
+            cardGrid.removeRow(at: 0)
+        }
         for (k, v) in rows {
             let kl = NSTextField(labelWithString: k)
             kl.font = NSFont.systemFont(ofSize: 11, weight: .medium)

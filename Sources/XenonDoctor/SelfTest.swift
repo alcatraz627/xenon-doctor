@@ -106,6 +106,21 @@ enum SelfTest {
         check("block: absent", !PadBlock.blocked(inEnvironmentLine: "/x/Game HOME=/Users/a PATH=/usr/bin"))
         check("block: empty value", !PadBlock.blocked(inEnvironmentLine: "/x/Game SDL_GAMECONTROLLER_IGNORE_DEVICES= PATH=/usr/bin"))
 
+        // DualShock 4 report block: D-pad hat, face buttons, shoulders, sticks, triggers.
+        var raw = [UInt8](repeating: 0, count: 16)
+        raw[1] = 255; raw[2] = 0; raw[3] = 128; raw[4] = 128   // left stick right and up, right stick centred
+        raw[5] = 0x02 | 0x20                                    // hat 2 (right), cross
+        raw[6] = 0x01 | 0x20                                    // L1, options
+        raw[7] = 0x01                                           // PS
+        raw[8] = 255; raw[9] = 0                                // L2 full, R2 off
+        let block = raw.withUnsafeMutableBufferPointer { PadBattery.parse($0.baseAddress!, base: 1) }
+        check("report: buttons", block.buttons == ["right", "cross", "L1", "options", "ps"])
+        check("report: left stick", block.leftX > 0.99 && block.leftY > 0.99)
+        check("report: right stick centred", abs(block.rightX) < 0.01 && abs(block.rightY) < 0.01)
+        check("report: triggers", block.leftTrigger == 1 && block.rightTrigger == 0)
+        raw[5] = 0x08; raw[6] = 0; raw[7] = 0                   // hat 8: released, nothing else held
+        check("report: hat released", raw.withUnsafeMutableBufferPointer { PadBattery.parse($0.baseAddress!, base: 1) }.buttons.isEmpty)
+
         // Key mapper: Undertale's keys from the pad's state; the stick and the D-pad both move.
         func keys(dpad: (Bool, Bool, Bool, Bool) = (false, false, false, false), stick: (Float, Float) = (0, 0),
                   cross: Bool = false, circle: Bool = false, square: Bool = false, triangle: Bool = false, options: Bool = false) -> Set<KeyMapper.Key> {

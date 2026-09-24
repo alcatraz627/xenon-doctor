@@ -118,22 +118,98 @@ final class PadBattery {
     /// Posted on the main thread when a pad attaches or detaches, so the rows re-read at once.
     static let padsChanged = Notification.Name("XenonDoctor.padsChanged")
 
+    /// What the pad's sticks, triggers and buttons are doing right now, straight from its
+    /// report. This is what the tester draws and the Undertale mapper reads, so neither
+    /// depends on macOS's game controller layer noticing the pad.
+    struct State: Equatable {
+        var buttons = Set<String>()
+        var leftX: Float = 0, leftY: Float = 0, rightX: Float = 0, rightY: Float = 0
+        var leftTrigger: Float = 0, rightTrigger: Float = 0
+        var at = Date.distantPast
+    }
+
+    private var states: [String: State] = [:]
+    /// Called on the main thread with every report that changes the state of a pad.
+    var onState: ((KnownPad?, State) -> Void)?
+
+    /// The latest state of a pad, or nil when it has sent nothing for two seconds.
+    func state(forMAC mac: String) -> State? {
+        lock.lock(); defer { lock.unlock() }
+        guard let s = states[KnownPad.bare(mac)], Date().timeIntervalSince(s.at) < 2 else { return nil }
+        return s
+    }
+
+    /// The freshest state from any pad.
+    func latestState() -> State? {
+        lock.lock(); defer { lock.unlock() }
+        return states.values.filter { Date().timeIntervalSince($0.at) < 2 }.max { $0.at < $1.at }
+    }
+
+    /// The DualShock 4 state block: sticks, D-pad and buttons, triggers. `base` is where
+    /// the block starts in the report (1 for the short report, 3 for the full one).
+    static func parse(_ report: UnsafeMutablePointer<UInt8>, base: Int) -> State {
+        func axis(_ b: UInt8) -> Float { (Float(b) - 127.5) / 127.5 }
+        var s = State()
+        s.leftX = axis(report[base]); s.leftY = -axis(report[base + 1])
+        s.rightX = axis(report[base + 2]); s.rightY = -axis(report[base + 3])
+        let b1 = report[base + 4], b2 = report[base + 5], b3 = report[base + 6]
+        switch b1 & 0x0F {
+        case 0: s.buttons.insert("up")
+        case 1: s.buttons.formUnion(["up", "right"])
+        case 2: s.buttons.insert("right")
+        case 3: s.buttons.formUnion(["down", "right"])
+        case 4: s.buttons.insert("down")
+        case 5: s.buttons.formUnion(["down", "left"])
+        case 6: s.buttons.insert("left")
+        case 7: s.buttons.formUnion(["up", "left"])
+        default: break
+        }
+        if b1 & 0x10 != 0 { s.buttons.insert("square") }
+        if b1 & 0x20 != 0 { s.buttons.insert("cross") }
+        if b1 & 0x40 != 0 { s.buttons.insert("circle") }
+        if b1 & 0x80 != 0 { s.buttons.insert("triangle") }
+        if b2 & 0x01 != 0 { s.buttons.insert("L1") }
+        if b2 & 0x02 != 0 { s.buttons.insert("R1") }
+        if b2 & 0x10 != 0 { s.buttons.insert("share") }
+        if b2 & 0x20 != 0 { s.buttons.insert("options") }
+        if b2 & 0x40 != 0 { s.buttons.insert("L3") }
+        if b2 & 0x80 != 0 { s.buttons.insert("R3") }
+        if b3 & 0x01 != 0 { s.buttons.insert("ps") }
+        if b3 & 0x02 != 0 { s.buttons.insert("touchpad") }
+        s.leftTrigger = Float(report[base + 7]) / 255
+        s.rightTrigger = Float(report[base + 8]) / 255
+        return s
+    }
+
     private func handle(_ device: IOHIDDevice, reportID: UInt8, report: UnsafeMutablePointer<UInt8>, length: Int) {
-        // Layout of the state block is the same for both transports; Bluetooth's full
-        // report puts it two bytes further in. Battery byte: low nibble is the level in
-        // tenths, bit 4 says a cable is attached.
-        let batteryByte: UInt8
+        // The state block sits at byte 1 of the short report (id 0x01) and byte 3 of the
+        // full one (id 0x11). Battery is two bytes past the block's end and only in the
+        // full report or the 64-byte short one: low nibble is the level in tenths, bit 4
+        // says a cable is attached.
+        let base: Int
+        let batteryByte: UInt8?
         switch reportID {
-        case 0x11 where length >= 34: batteryByte = report[32]
-        case 0x01 where length >= 32: batteryByte = report[30]
+        case 0x11 where length >= 12: base = 3; batteryByte = length >= 34 ? report[32] : nil
+        case 0x01 where length >= 10: base = 1; batteryByte = length >= 32 ? report[30] : nil
         default: return
         }
-        let level = Int(batteryByte & 0x0F)
-        let cable = batteryByte & 0x10 != 0
-        let percent = cable ? (level >= 11 ? 100 : min(level * 10, 100)) : min(level * 10 + 5, 100)
         guard let serial = IOHIDDeviceGetProperty(device, kIOHIDSerialNumberKey as CFString) as? String else { return }
+        let mac = KnownPad.bare(serial)
+        var state = PadBattery.parse(report, base: base)
+        state.at = Date()
         lock.lock()
-        readings[KnownPad.bare(serial)] = Reading(percent: percent, charging: cable, at: Date())
+        let previous = states[mac]
+        states[mac] = state
+        if let b = batteryByte {
+            let level = Int(b & 0x0F)
+            let cable = b & 0x10 != 0
+            let percent = cable ? (level >= 11 ? 100 : min(level * 10, 100)) : min(level * 10 + 5, 100)
+            readings[mac] = Reading(percent: percent, charging: cable, at: Date())
+        }
         lock.unlock()
+        if let cb = onState, previous.map({ $0.buttons != state.buttons || $0.leftX != state.leftX || $0.leftY != state.leftY }) ?? true {
+            let pad = Pads.pad(forMAC: mac)
+            if Thread.isMainThread { cb(pad, state) } else { DispatchQueue.main.async { cb(pad, state) } }
+        }
     }
 }
