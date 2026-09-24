@@ -11,6 +11,8 @@ final class MapPane: NSView {
     /// The grid's edge pins, switched off while it is hidden: an empty grid otherwise
     /// demands zero width and the window follows it.
     private var chordEdges: [NSLayoutConstraint] = []
+    private var mapShare: NSLayoutConstraint!
+    private var mapWhole: NSLayoutConstraint!
     private var timer: Timer?
 
     init() {
@@ -32,11 +34,28 @@ final class MapPane: NSView {
         column.spacing = 10
         column.edgeInsets = NSEdgeInsets(top: 12, left: 20, bottom: 14, right: 20)
         column.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(column)
+        // The column lives in a scroll view, so a long chord table scrolls under a short
+        // window instead of resizing it or falling off the bottom.
+        let doc = FlippedView()
+        doc.translatesAutoresizingMaskIntoConstraints = false
+        doc.addSubview(column)
+        let scroll = NSScrollView(frame: bounds)
+        scroll.autoresizingMask = [.width, .height]
+        scroll.documentView = doc
+        scroll.hasVerticalScroller = true
+        scroll.autohidesScrollers = true
+        scroll.drawsBackground = false
+        addSubview(scroll)
         // The window's own size sits at priority 500. Everything here that wants room
         // asks below that, so the tab fits the window instead of resizing it.
         let mapMin = map.heightAnchor.constraint(greaterThanOrEqualToConstant: 300)
         mapMin.priority = NSLayoutConstraint.Priority(499)
+        // With a chord table the pad takes the upper part; without one it takes the tab.
+        mapShare = map.heightAnchor.constraint(equalTo: scroll.contentView.heightAnchor, multiplier: 0.62)
+        mapShare.priority = NSLayoutConstraint.Priority(400)
+        mapWhole = map.heightAnchor.constraint(equalTo: scroll.contentView.heightAnchor, constant: -80)
+        mapWhole.priority = NSLayoutConstraint.Priority(400)
+        let mapFill = mapShare!
         chords.setContentCompressionResistancePriority(NSLayoutConstraint.Priority(498), for: .vertical)
         chords.setContentHuggingPriority(NSLayoutConstraint.Priority(498), for: .vertical)
         chordEdges = [
@@ -44,10 +63,12 @@ final class MapPane: NSView {
             chords.trailingAnchor.constraint(equalTo: column.trailingAnchor, constant: -20),
         ]
         NSLayoutConstraint.activate([
-            column.topAnchor.constraint(equalTo: topAnchor),
-            column.leadingAnchor.constraint(equalTo: leadingAnchor),
-            column.trailingAnchor.constraint(equalTo: trailingAnchor),
-            column.bottomAnchor.constraint(equalTo: bottomAnchor),
+            doc.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
+            column.topAnchor.constraint(equalTo: doc.topAnchor),
+            column.leadingAnchor.constraint(equalTo: doc.leadingAnchor),
+            column.trailingAnchor.constraint(equalTo: doc.trailingAnchor),
+            column.bottomAnchor.constraint(equalTo: doc.bottomAnchor),
+            mapFill,
             picker.leadingAnchor.constraint(equalTo: column.leadingAnchor, constant: 20),
             picker.trailingAnchor.constraint(equalTo: column.trailingAnchor, constant: -20),
             map.leadingAnchor.constraint(equalTo: column.leadingAnchor, constant: 20),
@@ -77,6 +98,8 @@ final class MapPane: NSView {
         }
         chords.isHidden = list.isEmpty
         for c in chordEdges { c.isActive = !list.isEmpty }
+        mapShare?.isActive = !list.isEmpty
+        mapWhole?.isActive = list.isEmpty
         let perRow = 3
         var i = 0
         while i < list.count {
