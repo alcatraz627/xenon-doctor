@@ -48,7 +48,8 @@ enum GuideWindow {
         .bullet("Factorio's hints use Xbox letters. On this pad **A** is Cross, **B** is Circle, **X** is Square, **Y** is Triangle."),
         .bullet("Left stick moves, right stick aims the cursor, click it to free the cursor. **Cross** builds and opens things, **Square** mines and uses, **Circle** clears the cursor or picks a pipette, **Triangle** opens your character."),
         .bullet("**L1** opens the quick panel, **R1** shoots, **Options** is the menu, **Share** is the map. **R2** with a button is the alternate action (R2 + Cross places a ghost)."),
-        .bullet("Xenon Doctor adds what Factorio keeps on Steam Deck paddles: **L2 + R2 + left** copy, **L2 + R2 + right** paste, **L2 + Options** search, **L2 + R2 + Options** blueprint library, **L2 + R2 + Triangle** undo, **L2 + R2 + Square** redo."),
+        .bullet("Xenon Doctor adds what Factorio keeps on Steam Deck paddles: **L2 + R2 + left** copy, **L2 + R2 + right** paste, **L2 + Options** search, **L2 + R2 + Options** blueprint library, **L2 + R2 + Triangle** undo, **L2 + R2 + Square** redo. And for the two buttons Factorio leaves empty: click the **touchpad** to zoom in, **L2** + touchpad to zoom out, click **L3** for technology."),
+        .bullet("The full chord table is on the Controller map tab, Factorio."),
 
         .h2("Pad blinks, shows connected, then drops"),
         .doThis("Hold **Share** and **PS** together for about four seconds until the light bar blinks fast, then let go. It connects and stays."),

@@ -43,10 +43,15 @@ enum KeyMaps {
         switch game.link {
         case .factorio:
             return [
-                ("R2 + Cross", "place a ghost"), ("R2 + Square", "copy entity settings"), ("R2 + Options", "pause"),
-                ("L2 + R2 + left", "copy"), ("L2 + R2 + right", "paste"), ("L2 + Options", "search"),
-                ("L2 + R2 + Options", "blueprint library"), ("L2 + R2 + Triangle", "undo"), ("L2 + R2 + Square", "redo"),
-                ("R2 + D-pad up or down", "zoom"), ("L2 + D-pad up or down", "cycle blueprints"),
+                ("Touchpad", "Zoom in"), ("L2 + Touchpad", "Zoom out"), ("R2 + D-pad up / down", "Zoom in / out"),
+                ("L3", "Technology"), ("L2 + Share", "Technology"), ("R2 + Share", "Logistic networks"),
+                ("R2 + Cross", "Place a ghost"), ("L2 + Cross", "Build around obstacles"), ("L2 + R2 + Cross", "Super-forced build"),
+                ("R2 + Square", "Copy entity settings"), ("R2 + Cross on an entity", "Paste entity settings"), ("R2 + Triangle", "Get in or out of a vehicle"),
+                ("R2 + R1", "Shoot the selected target"), ("L2 + R1", "Next weapon"), ("L2 + Triangle", "Spidertron remote"),
+                ("L2 + D-pad left / right", "Flip a blueprint"), ("L2 + D-pad up / down", "Cycle blueprints"), ("L2 + D-pad down", "Drop the held item"),
+                ("L2 + R2 + left", "Copy"), ("L2 + R2 + right", "Paste"), ("L2 + R2 + Triangle", "Undo"),
+                ("L2 + R2 + Square", "Redo"), ("L2 + Options", "Search"), ("L2 + R2 + Options", "Blueprint library"),
+                ("R2 + Options", "Pause"), ("L2 + R2 + Share", "Console"), ("L2 + R2 + D-pad up / down", "Next / previous surface"),
             ]
         default: return []
         }
@@ -63,11 +68,11 @@ enum KeyMaps {
 
     /// Factorio's stock controller layout plus the chords Xenon Doctor adds.
     static let factorio: [String: String] = [
-        "leftStick": "move", "rightStick": "aim the cursor", "R3": "free cursor on and off",
+        "leftStick": "move", "rightStick": "aim the cursor", "R3": "free cursor on and off", "L3": "technology",
         "up": "show info, rail layer", "down": "pick up items", "left": "rotate back", "right": "rotate",
         "cross": "build, open, confirm", "square": "mine, use item", "circle": "clear cursor, pipette, close", "triangle": "character screen",
         "L1": "quick panel", "R1": "shoot", "L2": "held: chords below", "R2": "held: alternate action",
-        "options": "menu", "share": "map",
+        "options": "menu", "share": "map", "touchpad": "zoom in (with L2: zoom out)",
     ]
 
     /// The keys Xenon Doctor presses for Undertale.

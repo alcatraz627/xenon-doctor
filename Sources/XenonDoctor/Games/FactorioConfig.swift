@@ -26,6 +26,11 @@ enum FactorioConfig {
         Line(section: "controls", key: "toggle-blueprint-library-controller", value: "controller-lefttrigger + controller-righttrigger + controller-start"),
         Line(section: "controls", key: "undo-controller", value: "controller-lefttrigger + controller-righttrigger + controller-y"),
         Line(section: "controls", key: "redo-controller", value: "controller-lefttrigger + controller-righttrigger + controller-x"),
+        // The touchpad click and the left stick click do nothing in Factorio's stock layout.
+        // These go in the alternative slots, so the stock chords keep working too.
+        Line(section: "controls", key: "zoom-in-controller-alternative", value: "controller-touchpad"),
+        Line(section: "controls", key: "zoom-out-controller-alternative", value: "controller-lefttrigger + controller-touchpad"),
+        Line(section: "controls", key: "open-technology-gui-controller-alternative", value: "controller-leftstick"),
     ]
 
     static var wanted: [Line] { [inputMethod] + chords }

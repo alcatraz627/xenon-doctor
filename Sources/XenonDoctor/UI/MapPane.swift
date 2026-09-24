@@ -7,7 +7,7 @@ import AppKit
 final class MapPane: NSView {
     private let picker = NSSegmentedControl(labels: Game.all.map { $0.title }, trackingMode: .selectOne, target: nil, action: nil)
     private let map = PadMapView()
-    private let chords = NSTextField(wrappingLabelWithString: "")
+    private let chords = NSGridView()
     private var timer: Timer?
 
     init() {
@@ -17,9 +17,9 @@ final class MapPane: NSView {
         picker.target = self
         picker.action = #selector(pick)
         picker.segmentDistribution = .fillEqually
-        chords.font = NSFont.systemFont(ofSize: 11)
-        chords.textColor = .secondaryLabelColor
-        chords.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        chords.rowSpacing = 5
+        chords.columnSpacing = 28
+        chords.xPlacement = .leading
         map.setContentHuggingPriority(.init(1), for: .vertical)
         map.setContentCompressionResistancePriority(.init(1), for: .vertical)
 
@@ -52,10 +52,41 @@ final class MapPane: NSView {
 
     @objc private func pick() {
         map.actions = KeyMaps.actions(for: game)
-        let list = KeyMaps.chords(for: game)
-        chords.stringValue = list.isEmpty ? "" : "Chords: " + list.map { "\($0.0) \($0.1)" }.joined(separator: "  ·  ")
-        chords.isHidden = list.isEmpty
+        rebuildChords(KeyMaps.chords(for: game))
         map.needsDisplay = true
+    }
+
+    /// The chord table: three across, each cell the chord in a muted weight and what it
+    /// does in the text colour, so the eye lands on the action.
+    private func rebuildChords(_ list: [(String, String)]) {
+        while chords.numberOfRows > 0 {
+            let row = chords.row(at: 0)
+            for i in 0..<row.numberOfCells { row.cell(at: i).contentView?.removeFromSuperview() }
+            chords.removeRow(at: 0)
+        }
+        chords.isHidden = list.isEmpty
+        let perRow = 3
+        var i = 0
+        while i < list.count {
+            var cells: [NSView] = []
+            for j in i..<min(i + perRow, list.count) {
+                let (chord, action) = list[j]
+                let key = NSTextField(labelWithString: chord)
+                key.font = NSFont.systemFont(ofSize: 10, weight: .semibold)
+                key.textColor = .secondaryLabelColor
+                let what = NSTextField(labelWithString: action)
+                what.font = NSFont.systemFont(ofSize: 10)
+                what.textColor = .labelColor
+                let cell = NSStackView(views: [key, what])
+                cell.orientation = .vertical
+                cell.alignment = .leading
+                cell.spacing = 0
+                cells.append(cell)
+            }
+            while cells.count < perRow { cells.append(NSView()) }
+            chords.addRow(with: cells)
+            i += perRow
+        }
     }
 
     func select(_ game: Game) {
@@ -95,7 +126,7 @@ final class PadMapView: NSView {
         "L2": CGPoint(x: -5.2, y: 3.4), "L1": CGPoint(x: -5.2, y: 2.7), "R2": CGPoint(x: 5.2, y: 3.4), "R1": CGPoint(x: 5.2, y: 2.7),
         "up": CGPoint(x: -4.6, y: 1.35), "down": CGPoint(x: -4.6, y: -0.15), "left": CGPoint(x: -5.35, y: 0.6), "right": CGPoint(x: -3.85, y: 0.6),
         "triangle": CGPoint(x: 4.6, y: 1.65), "cross": CGPoint(x: 4.6, y: -0.45), "square": CGPoint(x: 3.55, y: 0.6), "circle": CGPoint(x: 5.65, y: 0.6),
-        "leftStick": CGPoint(x: -2.3, y: -1.3), "rightStick": CGPoint(x: 2.3, y: -1.3), "L3": CGPoint(x: -2.3, y: -1.3), "R3": CGPoint(x: 2.3, y: -1.3),
+        "leftStick": CGPoint(x: -2.3, y: -1.3), "rightStick": CGPoint(x: 2.3, y: -1.3), "L3": CGPoint(x: -2.3, y: -2.45), "R3": CGPoint(x: 2.3, y: -2.45),
         "touchpad": CGPoint(x: 0, y: 1.4), "share": CGPoint(x: -2.35, y: 1.6), "options": CGPoint(x: 2.35, y: 1.6), "ps": CGPoint(x: 0, y: -0.5),
     ]
     static let faceColors: [String: NSColor] = ["triangle": .systemGreen, "cross": .systemBlue, "square": .systemPink, "circle": .systemRed]
