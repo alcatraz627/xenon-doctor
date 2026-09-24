@@ -8,6 +8,9 @@ final class MapPane: NSView {
     private let picker = NSSegmentedControl(labels: Game.all.map { $0.title }, trackingMode: .selectOne, target: nil, action: nil)
     private let map = PadMapView()
     private let chords = NSGridView()
+    /// The grid's edge pins, switched off while it is hidden: an empty grid otherwise
+    /// demands zero width and the window follows it.
+    private var chordEdges: [NSLayoutConstraint] = []
     private var timer: Timer?
 
     init() {
@@ -30,6 +33,16 @@ final class MapPane: NSView {
         column.edgeInsets = NSEdgeInsets(top: 12, left: 20, bottom: 14, right: 20)
         column.translatesAutoresizingMaskIntoConstraints = false
         addSubview(column)
+        // The window's own size sits at priority 500. Everything here that wants room
+        // asks below that, so the tab fits the window instead of resizing it.
+        let mapMin = map.heightAnchor.constraint(greaterThanOrEqualToConstant: 300)
+        mapMin.priority = NSLayoutConstraint.Priority(499)
+        chords.setContentCompressionResistancePriority(NSLayoutConstraint.Priority(498), for: .vertical)
+        chords.setContentHuggingPriority(NSLayoutConstraint.Priority(498), for: .vertical)
+        chordEdges = [
+            chords.leadingAnchor.constraint(equalTo: column.leadingAnchor, constant: 20),
+            chords.trailingAnchor.constraint(equalTo: column.trailingAnchor, constant: -20),
+        ]
         NSLayoutConstraint.activate([
             column.topAnchor.constraint(equalTo: topAnchor),
             column.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -39,10 +52,8 @@ final class MapPane: NSView {
             picker.trailingAnchor.constraint(equalTo: column.trailingAnchor, constant: -20),
             map.leadingAnchor.constraint(equalTo: column.leadingAnchor, constant: 20),
             map.trailingAnchor.constraint(equalTo: column.trailingAnchor, constant: -20),
-            map.heightAnchor.constraint(greaterThanOrEqualToConstant: 300),
-            chords.leadingAnchor.constraint(equalTo: column.leadingAnchor, constant: 20),
-            chords.trailingAnchor.constraint(equalTo: column.trailingAnchor, constant: -20),
-        ])
+            mapMin,
+        ] + chordEdges)
         pick()
     }
 
@@ -65,6 +76,7 @@ final class MapPane: NSView {
             chords.removeRow(at: 0)
         }
         chords.isHidden = list.isEmpty
+        for c in chordEdges { c.isActive = !list.isEmpty }
         let perRow = 3
         var i = 0
         while i < list.count {
@@ -77,6 +89,11 @@ final class MapPane: NSView {
                 let what = NSTextField(labelWithString: action)
                 what.font = NSFont.systemFont(ofSize: 10)
                 what.textColor = .labelColor
+                for f in [key, what] {
+                    f.setContentCompressionResistancePriority(NSLayoutConstraint.Priority(498), for: .vertical)
+                    f.setContentCompressionResistancePriority(NSLayoutConstraint.Priority(498), for: .horizontal)
+                    f.lineBreakMode = .byTruncatingTail
+                }
                 let cell = NSStackView(views: [key, what])
                 cell.orientation = .vertical
                 cell.alignment = .leading
