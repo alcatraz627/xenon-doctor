@@ -7,7 +7,7 @@ import GameController
 /// Polls the pad thirty times a second while the tab is on screen and stops when it is not.
 final class TesterPane: NSView {
     private let scene = ControllerView(frame: NSRect(x: 0, y: 0, width: 600, height: 300))
-    private let warning = NSTextField(labelWithString: "No controller reaching the Mac")
+    private let warning = NSTextField(labelWithString: "Reading the pad…")
     private let card = NSStackView()
     private let cardTitle = NSTextField(labelWithString: "")
     private let cardGrid = NSGridView()

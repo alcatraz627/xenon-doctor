@@ -4,8 +4,16 @@ import AppKit
 /// the same buttons, Tester is the live pad schematic, Controller map is what each
 /// control does per game, Guide is the Stratos Xenon guide.
 /// The menu stays the fast path; this is where a person reads when something is wrong.
-final class DoctorWindow {
+final class DoctorWindow: NSObject, NSTabViewDelegate {
     enum Tab: Int { case status = 0, tester = 1, map = 2, guide = 3 }
+
+    /// Every way of reaching a tab lands here, mouse clicks included. The tester and the
+    /// map poll only while shown, so the one that stops itself when hidden must be
+    /// restarted from the tab view's own callback, not only from the menu and Cmd keys.
+    func tabView(_ tabView: NSTabView, didSelect item: NSTabViewItem?) {
+        guard let item = item, let tab = Tab(rawValue: tabView.indexOfTabViewItem(item)) else { return }
+        started(tab)
+    }
 
     private var window: NSWindow?
     fileprivate var tabs: NSTabView?
@@ -78,6 +86,7 @@ final class DoctorWindow {
         let tv = NSTabView(frame: NSRect(x: 0, y: 0, width: 640, height: 640))
         tv.tabViewType = .topTabsBezelBorder
         tv.autoresizingMask = [.width, .height]
+        tv.delegate = self
 
         let statusItem = NSTabViewItem(identifier: "status")
         statusItem.label = "Status"
