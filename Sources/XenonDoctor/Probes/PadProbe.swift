@@ -40,7 +40,9 @@ struct PadProbe: Probe {
     /// the main thread while a worker saw the pad, which is how the two tabs disagreed.
     static func prepare() {
         PadBattery.shared.start()
-        GCController.startWirelessControllerDiscovery { }
+        // No wireless discovery scan: a paired pad reaches GameController on its own, and
+        // an inquiry scan degrades every Bluetooth link while it runs, which read as input
+        // lag in the games. Versions up to 0.3.2 scanned every five seconds.
     }
 
     /// Paired known pads from the Bluetooth stack. Only called when no pad is attached.
