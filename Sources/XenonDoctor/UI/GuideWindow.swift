@@ -38,7 +38,17 @@ enum GuideWindow {
         .doThis("Turn off: hold **PS** for about ten seconds until the light bar goes dark. Do this after closing the game."),
         .bullet("Launch Stardew Valley from Steam as usual. The game reads the pad directly."),
         .bullet("Factorio reads the pad directly too, once its input method is set to game controller. The Factorio row sets it with one click."),
-        .bullet("Undertale cannot read a pad on a Mac. While Undertale is the front window, Xenon Doctor presses its keys for you: D-pad and left stick move, **Cross** is Z, **Circle** and **Square** are X, **Triangle** is C, **Options** is Enter. This needs the Accessibility switch on once; the Undertale row takes you there."),
+        .bullet("Undertale cannot read a pad on a Mac. While Undertale is the front window, Xenon Doctor presses its keys for you. This needs the Accessibility switch on once; the Undertale row takes you there."),
+
+        .h2("Undertale on the pad"),
+        .bullet("**D-pad** or **left stick**: move. **Cross**: confirm (Z). **Circle**, **Square**, or hold **R2**: cancel, and skip text while held (X)."),
+        .bullet("**Triangle** or click the **touchpad**: menu (C). **Options**: Enter. **Share**: fullscreen on and off (F4)."),
+
+        .h2("Factorio on the pad"),
+        .bullet("Factorio's hints use Xbox letters. On this pad **A** is Cross, **B** is Circle, **X** is Square, **Y** is Triangle."),
+        .bullet("Left stick moves, right stick aims the cursor, click it to free the cursor. **Cross** builds and opens things, **Square** mines and uses, **Circle** clears the cursor or picks a pipette, **Triangle** opens your character."),
+        .bullet("**L1** opens the quick panel, **R1** shoots, **Options** is the menu, **Share** is the map. **R2** with a button is the alternate action (R2 + Cross places a ghost)."),
+        .bullet("Xenon Doctor adds what Factorio keeps on Steam Deck paddles: **L2 + R2 + left** copy, **L2 + R2 + right** paste, **L2 + Options** search, **L2 + R2 + Options** blueprint library, **L2 + R2 + Triangle** undo, **L2 + R2 + Square** redo."),
 
         .h2("Pad blinks, shows connected, then drops"),
         .doThis("Hold **Share** and **PS** together for about four seconds until the light bar blinks fast, then let go. It connects and stays."),

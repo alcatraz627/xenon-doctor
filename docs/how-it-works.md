@@ -37,7 +37,7 @@ Every button runs its repair and then reads the whole chain again, and the rows 
 
 ## Undertale: the key mapper
 
-Undertale is a GameMaker game and cannot read a pad on a Mac (its own FAQ says so, and its bundled gamepad library never answered this pad). So while Undertale is the front window, Xenon Doctor turns pad presses into key presses: D-pad and left stick are the arrows, Cross is Z, Circle and Square are X, Triangle is C, Options is Enter. The moment Undertale is not in front, or the pad disconnects, every held key is released. macOS only lets an app press keys with its Accessibility switch on, which is the Undertale row's one go-there button.
+Undertale is a GameMaker game and cannot read a pad on a Mac (its own FAQ says so, and its bundled gamepad library never answered this pad). So while Undertale is the front window, Xenon Doctor turns pad presses into key presses: D-pad and left stick are the arrows (the stick engages past 0.4 and lets go under 0.3, so a diagonal does not flicker), Cross is Z, Circle, Square and a held R2 are X, Triangle and the touchpad are C, Options is Enter, Share is F4. The presses come from the pad's own HID reports, the same source as the Status row and the tester. The moment Undertale is not in front, or the pad disconnects, every held key is released. macOS only lets an app press keys with its Accessibility switch on, which is the Undertale row's one go-there button.
 
 That switch is remembered by the app's code signature, so `build.sh` signs with the household's own certificate (`tools/signing-cert.sh` makes it once, on the Mac that builds). An ad-hoc signature changes with every build, and the switch would look on and do nothing after each update.
 
@@ -77,7 +77,7 @@ Versions 0.2 through 0.3.2 also put `SDL_GAMECONTROLLER_IGNORE_DEVICES` into the
 | Reconnect controller | asks each paired pad to connect; if none answers in eight seconds, cycles the radio once and asks again |
 | Fix Steam settings | quits Steam and waits for it to exit (Steam answers "cancel" and then exits on its own, up to 75 s), writes the pinned keys with a backup beside the file, relaunches Steam |
 | Clear the stale controller block | clears the old login-session variable again; offered only when it came back after the app cleared it |
-| Turn on Factorio's controller setting | writes `input-method=game-controller` with a backup beside the file; a running Factorio is asked to quit first (it offers to save), then relaunched |
+| Set up Factorio for the pad | writes `input-method=game-controller` and binds copy, paste, search, blueprint library, undo and redo to L2 and R2 chords (Factorio ships them on Steam Deck paddles), with a backup beside the file; a running Factorio is asked to quit first (it offers to save), then relaunched |
 | Allow Xenon Doctor to press keys | lists the app under Accessibility and opens that pane; the person flips the switch |
 | Relaunch Stardew Valley, Factorio, Undertale | asks the game to quit, waits, launches it again through Steam. Never a kill signal |
 

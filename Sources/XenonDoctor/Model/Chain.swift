@@ -75,7 +75,7 @@ enum RepairKind: String, CaseIterable {
         case .relaunchGame: return "Relaunch Stardew Valley"
         case .relaunchFactorio: return "Relaunch Factorio"
         case .relaunchUndertale: return "Relaunch Undertale"
-        case .enableFactorioPad: return "Turn on Factorio's controller setting"
+        case .enableFactorioPad: return "Set up Factorio for the pad"
         case .openBluetoothPrivacy: return "Open Bluetooth privacy settings"
         case .openAccessibility: return "Allow Xenon Doctor to press keys"
         case .installSteam: return "Get Steam"

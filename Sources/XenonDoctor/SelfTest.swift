@@ -83,15 +83,21 @@ enum SelfTest {
 
         // Factorio config: the commented default is replaced in place, a set value is read
         // back, a file with no [input] section gets one, and the write is idempotent.
-        let ini = "[graphics]\n; fullscreen=true\n\n[input]\n; Options: keyboard-and-mouse, game-controller\n; input-method=keyboard-and-mouse\n\n; mouse-sensitivity=1\n\n[controls]\n; move=\n"
-        check("factorio: default reads as unset", FactorioConfig.value(in: ini) == nil)
-        let set = FactorioConfig.setting(ini, to: "game-controller")
-        check("factorio: set reads back", FactorioConfig.value(in: set) == "game-controller")
+        let ini = "[graphics]\n; fullscreen=true\n\n[input]\n; Options: keyboard-and-mouse, game-controller\n; input-method=keyboard-and-mouse\n\n; mouse-sensitivity=1\n\n[controls]\n; move=\n; copy-controller=controller-paddle1\n"
+        let im = FactorioConfig.inputMethod
+        check("factorio: default reads as unset", FactorioConfig.value(in: ini, section: "input", key: "input-method") == nil)
+        let set = FactorioConfig.setting(ini, im)
+        check("factorio: set reads back", FactorioConfig.value(in: set, section: "input", key: "input-method") == "game-controller")
         check("factorio: replaced in place", set.contains("[input]\n; Options: keyboard-and-mouse, game-controller\ninput-method=game-controller\n\n; mouse-sensitivity=1"))
-        check("factorio: other sections untouched", set.hasPrefix("[graphics]\n; fullscreen=true\n") && set.hasSuffix("[controls]\n; move=\n"))
-        check("factorio: idempotent", FactorioConfig.setting(set, to: "game-controller") == set)
-        check("factorio: no section", FactorioConfig.value(in: FactorioConfig.setting("[graphics]\n; a=b\n", to: "game-controller")) == "game-controller")
-        check("factorio: key outside [input] ignored", FactorioConfig.value(in: "[other]\ninput-method=game-controller\n") == nil)
+        check("factorio: other sections untouched", set.hasPrefix("[graphics]\n; fullscreen=true\n") && set.hasSuffix("[controls]\n; move=\n; copy-controller=controller-paddle1\n"))
+        check("factorio: idempotent", FactorioConfig.setting(set, im) == set)
+        check("factorio: no section", FactorioConfig.value(in: FactorioConfig.setting("[graphics]\n; a=b\n", im), section: "input", key: "input-method") == "game-controller")
+        check("factorio: key outside [input] ignored", FactorioConfig.value(in: "[other]\ninput-method=game-controller\n", section: "input", key: "input-method") == nil)
+        let all = FactorioConfig.setting(ini, FactorioConfig.wanted)
+        check("factorio: paddle line replaced in place", all.contains("; move=\ncopy-controller=controller-lefttrigger + controller-righttrigger + controller-dpleft\n") && !all.contains("paddle1"))
+        check("factorio: every chord reads back", FactorioConfig.chords.allSatisfy { FactorioConfig.value(in: all, section: $0.section, key: $0.key) == $0.value })
+        check("factorio: chords idempotent", FactorioConfig.setting(all, FactorioConfig.wanted) == all)
+        check("factorio: chords distinct", Set(FactorioConfig.chords.map { $0.value }).count == FactorioConfig.chords.count)
 
         // Steam's process log, with the CR LF endings Steam writes: a launch then an exit
         // is not running; a launch after an exit is.
@@ -137,6 +143,19 @@ enum SelfTest {
         check("mapper: stick inside deadzone", keys(stick: (0.3, -0.3)).isEmpty)
         check("mapper: diagonal", keys(stick: (-0.7, 0.7)) == [.left, .up])
         check("mapper: chord", keys(dpad: (false, true, false, false), cross: true) == [.down, .z])
+        check("mapper: R2 held is X", KeyMapper.keys(dpadUp: false, dpadDown: false, dpadLeft: false, dpadRight: false, stickX: 0, stickY: 0,
+                                                    cross: false, circle: false, square: false, triangle: false, options: false, rightTrigger: 0.8) == [.x])
+        check("mapper: share is F4, touchpad is C", KeyMapper.keys(dpadUp: false, dpadDown: false, dpadLeft: false, dpadRight: false, stickX: 0, stickY: 0,
+                                                    cross: false, circle: false, square: false, triangle: false, options: false, share: true, touchpad: true) == [.f4, .c])
+        // Hysteresis: 0.35 does not engage from rest, but keeps a held arrow; 0.25 lets go.
+        func stickOnly(_ x: Float, held: Set<KeyMapper.Key>) -> Set<KeyMapper.Key> {
+            KeyMapper.keys(dpadUp: false, dpadDown: false, dpadLeft: false, dpadRight: false, stickX: x, stickY: 0,
+                           cross: false, circle: false, square: false, triangle: false, options: false, held: held)
+        }
+        check("mapper: 0.35 from rest stays idle", stickOnly(0.35, held: []).isEmpty)
+        check("mapper: 0.45 engages", stickOnly(0.45, held: []) == [.right])
+        check("mapper: 0.35 keeps a held arrow", stickOnly(0.35, held: [.right]) == [.right])
+        check("mapper: 0.25 lets go", stickOnly(0.25, held: [.right]).isEmpty)
 
         // Game descriptors: every game has a row, a relaunch and an install button, and a pin key.
         check("games: rows", Game.all.map { $0.link } == [.game, .factorio, .undertale])

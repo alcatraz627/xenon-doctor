@@ -7,16 +7,21 @@ import ApplicationServices
 /// Only while Undertale is the front window; the moment it is not, every held key is
 /// released. macOS lets an app press keys only with its Accessibility switch on.
 ///
-/// The table is Undertale's own keyboard: arrows move, Z confirms, X cancels, C opens
-/// the menu, Enter also confirms.
+/// The table is Undertale's own keyboard: arrows move, Z confirms, X cancels and skips
+/// text while held, C opens the menu, Enter also confirms, F4 toggles fullscreen.
 final class KeyMapper {
     static let shared = KeyMapper()
 
     /// Virtual key codes on a US layout; Undertale reads codes, not characters.
     enum Key: UInt16, CaseIterable {
-        case z = 0x06, x = 0x07, c = 0x08, enter = 0x24
+        case z = 0x06, x = 0x07, c = 0x08, enter = 0x24, f4 = 0x76
         case left = 0x7B, right = 0x7C, down = 0x7D, up = 0x7E
     }
+
+    /// The stick engages an arrow past `edgeOn` and lets go under `edgeOff`; the gap keeps
+    /// a diagonal from flickering when the stick rests near one edge.
+    static let edgeOn: Float = 0.4
+    static let edgeOff: Float = 0.3
 
     /// True when macOS lets this app post key events.
     static var trusted: Bool { AXIsProcessTrusted() }
@@ -42,12 +47,8 @@ final class KeyMapper {
         guard !started else { return }
         started = true
         PadBattery.shared.onState = { [weak self] _, s in
-            self?.apply(KeyMapper.keys(dpadUp: s.buttons.contains("up"), dpadDown: s.buttons.contains("down"),
-                                       dpadLeft: s.buttons.contains("left"), dpadRight: s.buttons.contains("right"),
-                                       stickX: s.leftX, stickY: s.leftY,
-                                       cross: s.buttons.contains("cross"), circle: s.buttons.contains("circle"),
-                                       square: s.buttons.contains("square"), triangle: s.buttons.contains("triangle"),
-                                       options: s.buttons.contains("options")))
+            guard let self = self else { return }
+            self.apply(KeyMapper.keys(for: s, held: self.held))
         }
         for c in GCController.controllers() { hook(c) }
         NotificationCenter.default.addObserver(forName: .GCControllerDidConnect, object: nil, queue: .main) { [weak self] n in
@@ -69,34 +70,49 @@ final class KeyMapper {
         guard let pad = c.extendedGamepad else { return }
         pad.valueChangedHandler = { [weak self] pad, _ in
             // The report path wins while it is alive; this only fills in when it is not.
-            guard PadBattery.shared.latestState() == nil else { return }
-            self?.apply(KeyMapper.keys(for: pad))
+            guard let self = self, PadBattery.shared.latestState() == nil else { return }
+            self.apply(KeyMapper.keys(for: pad, held: self.held))
         }
     }
 
-    /// The keys the pad's current state asks for. Pure, so the self-test can check it.
-    static func keys(for pad: GCExtendedGamepad) -> Set<Key> {
+    /// The keys the pad's report asks for. Pure, so the self-test can check it.
+    static func keys(for s: PadBattery.State, held: Set<Key>) -> Set<Key> {
+        keys(dpadUp: s.buttons.contains("up"), dpadDown: s.buttons.contains("down"),
+             dpadLeft: s.buttons.contains("left"), dpadRight: s.buttons.contains("right"),
+             stickX: s.leftX, stickY: s.leftY,
+             cross: s.buttons.contains("cross"), circle: s.buttons.contains("circle"),
+             square: s.buttons.contains("square"), triangle: s.buttons.contains("triangle"),
+             options: s.buttons.contains("options"), share: s.buttons.contains("share"),
+             touchpad: s.buttons.contains("touchpad"), rightTrigger: s.rightTrigger, held: held)
+    }
+
+    static func keys(for pad: GCExtendedGamepad, held: Set<Key>) -> Set<Key> {
         keys(dpadUp: pad.dpad.up.isPressed, dpadDown: pad.dpad.down.isPressed,
              dpadLeft: pad.dpad.left.isPressed, dpadRight: pad.dpad.right.isPressed,
              stickX: pad.leftThumbstick.xAxis.value, stickY: pad.leftThumbstick.yAxis.value,
              cross: pad.buttonA.isPressed, circle: pad.buttonB.isPressed,
              square: pad.buttonX.isPressed, triangle: pad.buttonY.isPressed,
-             options: pad.buttonMenu.isPressed)
+             options: pad.buttonMenu.isPressed, share: pad.buttonOptions?.isPressed ?? false,
+             touchpad: (pad as? GCDualShockGamepad)?.touchpadButton.isPressed ?? false,
+             rightTrigger: pad.rightTrigger.value, held: held)
     }
 
     static func keys(dpadUp: Bool, dpadDown: Bool, dpadLeft: Bool, dpadRight: Bool,
                      stickX: Float, stickY: Float,
-                     cross: Bool, circle: Bool, square: Bool, triangle: Bool, options: Bool) -> Set<Key> {
+                     cross: Bool, circle: Bool, square: Bool, triangle: Bool, options: Bool,
+                     share: Bool = false, touchpad: Bool = false, rightTrigger: Float = 0,
+                     held: Set<Key> = []) -> Set<Key> {
         var out = Set<Key>()
-        let edge: Float = 0.5
-        if dpadUp || stickY > edge { out.insert(.up) }
-        if dpadDown || stickY < -edge { out.insert(.down) }
-        if dpadLeft || stickX < -edge { out.insert(.left) }
-        if dpadRight || stickX > edge { out.insert(.right) }
+        func stick(_ v: Float, _ key: Key) -> Bool { v > (held.contains(key) ? edgeOff : edgeOn) }
+        if dpadUp || stick(stickY, .up) { out.insert(.up) }
+        if dpadDown || stick(-stickY, .down) { out.insert(.down) }
+        if dpadLeft || stick(-stickX, .left) { out.insert(.left) }
+        if dpadRight || stick(stickX, .right) { out.insert(.right) }
         if cross { out.insert(.z) }
-        if circle || square { out.insert(.x) }
-        if triangle { out.insert(.c) }
+        if circle || square || rightTrigger > 0.5 { out.insert(.x) }
+        if triangle || touchpad { out.insert(.c) }
         if options { out.insert(.enter) }
+        if share { out.insert(.f4) }
         return out
     }
 

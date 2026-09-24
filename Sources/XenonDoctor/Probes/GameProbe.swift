@@ -98,6 +98,11 @@ struct GameProbe: Probe {
                                  hint: "Factorio only listens to a pad when its input method is set to game controller. The button saves your game, flips the setting, and relaunches.",
                                  brief: "Input method is keyboard; the button flips it")
             }
+            if !FactorioConfig.missing().isEmpty {
+                return LinkState(link, ok: false, detail: "running, but copy, paste, search and undo are not on the pad yet", repair: .enableFactorioPad,
+                                 hint: "Factorio puts those on Steam Deck paddles this pad does not have. The button saves your game, binds them to L2 and R2 chords, and relaunches.",
+                                 brief: "Paddle actions unbound; the button binds them")
+            }
         case .keyMapper:
             if !KeyMapper.trusted {
                 return keyMapperNotAllowed(running: true)
@@ -122,8 +127,13 @@ struct GameProbe: Probe {
         case .gameController:
             if !FactorioConfig.controllerEnabled() {
                 return LinkState(link, ok: false, detail: "set to keyboard and mouse input", repair: .enableFactorioPad,
-                                 hint: "Factorio only listens to a pad when its input method is set to game controller. One click sets it.",
+                                 hint: "Factorio only listens to a pad when its input method is set to game controller. One click sets it, and binds copy, paste, search and undo to the pad.",
                                  brief: "Input method is keyboard; one click sets it")
+            }
+            if !FactorioConfig.missing().isEmpty {
+                return LinkState(link, ok: false, detail: "copy, paste, search and undo are not on the pad yet", repair: .enableFactorioPad,
+                                 hint: "Factorio puts those on Steam Deck paddles this pad does not have. One click binds them to L2 and R2 chords.",
+                                 brief: "Paddle actions unbound; one click binds them")
             }
         case .keyMapper:
             if !KeyMapper.trusted { return keyMapperNotAllowed(running: false) }
