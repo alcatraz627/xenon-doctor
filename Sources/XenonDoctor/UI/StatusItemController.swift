@@ -174,6 +174,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
         addWindowItem("Open Xenon Doctor", key: "o", symbol: "macwindow", action: #selector(openStatus))
         addWindowItem("Button tester", key: "t", symbol: "dot.circle.and.hand.point.up.left.fill", action: #selector(showTester))
+        addWindowItem("Controller map", key: "m", symbol: "map.fill", action: #selector(showMap))
         addWindowItem("Controller guide", key: "g", symbol: "book.fill", action: #selector(showGuide))
         menu.addItem(.separator())
         addUpdateItem()
@@ -249,6 +250,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     @objc private func openStatus() { doctor.show(.status) }
     @objc private func showGuide() { doctor.show(.guide) }
     @objc private func showTester() { doctor.show(.tester) }
+    @objc private func showMap() { doctor.show(.map) }
     @objc private func checkForUpdates() { updater.check(force: true) }
     @objc private func installUpdate() { updater.installAvailable() }
 
@@ -292,6 +294,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         switch which {
         case "guide": doctor.show(.guide)
         case "tester": doctor.show(.tester)
+        case "map": doctor.show(.map)
+        case "map-factorio": doctor.showMap(for: .factorio)
+        case "map-undertale": doctor.showMap(for: .undertale)
         case "menu":
             // Pops the menu once the first snapshot is in, so it can be screenshotted.
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in

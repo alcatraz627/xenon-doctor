@@ -1,15 +1,17 @@
 import AppKit
 
-/// The one window: three tabs. Status mirrors the menu with room for the full hints and
-/// the same buttons, Tester is the live pad schematic, Guide is the Stratos Xenon guide.
+/// The one window: four tabs. Status mirrors the menu with room for the full hints and
+/// the same buttons, Tester is the live pad schematic, Controller map is what each
+/// control does per game, Guide is the Stratos Xenon guide.
 /// The menu stays the fast path; this is where a person reads when something is wrong.
 final class DoctorWindow {
-    enum Tab: Int { case status = 0, tester = 1, guide = 2 }
+    enum Tab: Int { case status = 0, tester = 1, map = 2, guide = 3 }
 
     private var window: NSWindow?
     fileprivate var tabs: NSTabView?
     private let status = StatusPane()
     fileprivate let tester = TesterPane()
+    fileprivate let map = MapPane()
 
     /// Called with the repair a Status-tab button asks for; the menu controller runs it.
     var onRepair: ((RepairKind) -> Void)? {
@@ -38,7 +40,7 @@ final class DoctorWindow {
         if window == nil { build() }
         Trace.log("built; tabs=\(tabs?.numberOfTabViewItems ?? -1)")
         tabs?.selectTabViewItem(at: tab.rawValue)
-        if tab == .tester { tester.start() }
+        started(tab)
         GuideWindow.center(window!)
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
@@ -52,7 +54,18 @@ final class DoctorWindow {
         let cur = tv.indexOfTabViewItem(tv.selectedTabViewItem ?? tv.tabViewItem(at: 0))
         let next = ((cur + delta) % n + n) % n
         tv.selectTabViewItem(at: next)
-        if next == Tab.tester.rawValue { tester.start() }
+        if let t = Tab(rawValue: next) { started(t) }
+    }
+
+    /// The tabs that poll the pad start their timers when shown; each stops itself when hidden.
+    fileprivate func started(_ tab: Tab) {
+        if tab == .tester { tester.start() }
+        if tab == .map { map.start() }
+    }
+
+    func showMap(for game: Game) {
+        show(.map)
+        map.select(game)
     }
 
     private func build() {
@@ -75,6 +88,11 @@ final class DoctorWindow {
         testerItem.label = "Button tester"
         testerItem.view = tester
         tv.addTabViewItem(testerItem)
+
+        let mapItem = NSTabViewItem(identifier: "map")
+        mapItem.label = "Controller map"
+        mapItem.view = map
+        tv.addTabViewItem(mapItem)
 
         let guideItem = NSTabViewItem(identifier: "guide")
         guideItem.label = "Controller guide"
@@ -105,10 +123,9 @@ final class DoctorPanel: NSWindow {
             owner?.step(flags.contains(.shift) ? -1 : 1)
             return true
         }
-        if flags == .command, let n = Int(key), (1...3).contains(n) {
-            owner?.step(0)  // keeps the tester timer honest if the index lands there
+        if flags == .command, let n = Int(key), (1...4).contains(n) {
             owner?.tabs?.selectTabViewItem(at: n - 1)
-            if n == 2 { owner?.tester.start() }
+            if let t = DoctorWindow.Tab(rawValue: n - 1) { owner?.started(t) }
             return true
         }
         return super.performKeyEquivalent(with: event)

@@ -129,7 +129,7 @@ case "--remove-pad":
     }
 
 case "--help", "-h":
-    print("XenonDoctor [--status | --repair <kind> | --self-test | --pads | --add-pad MARK MAC [note] | --remove-pad MARK | --check-update | --update [--force] | --window | --guide | --tester]")
+    print("XenonDoctor [--status | --repair <kind> | --self-test | --pads | --add-pad MARK MAC [note] | --remove-pad MARK | --check-update | --update [--force] | --window | --guide | --tester | --map [factorio|undertale]]")
     exit(0)
 
 default:
@@ -142,6 +142,7 @@ default:
     let delegate = AppDelegate()
     if args.first == "--guide" { delegate.openOnLaunch = "guide" }
     if args.first == "--tester" { delegate.openOnLaunch = "tester" }
+    if args.first == "--map" { delegate.openOnLaunch = args.count > 1 && !args[1].hasPrefix("--") ? "map-\(args[1])" : "map" }
     if args.first == "--window" { delegate.openOnLaunch = "status" }
     if args.first == "--menu" { delegate.openOnLaunch = "menu" }
     // --frame WxH sizes the window on launch, for checking layouts at other sizes.
