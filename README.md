@@ -1,8 +1,8 @@
-<div align="center">
-  <img src="assets/cover.svg" alt="Xenon Doctor cover" width="160">
-</div>
+<p align="center">
+  <img src=".github/readme/banner.svg" alt="xenon-doctor banner: Status window, chain and guide" width="100%">
+</p>
 
-<h1 align="center">Xenon Doctor</h1>
+<h1 align="center"><img src=".github/readme/favicon.svg" alt="" width="32" height="32"> Xenon Doctor</h1>
 
 <p align="center">
   A macOS menu bar app that keeps two Cosmic Byte Stratos Xenon gamepads working with Steam, Stardew Valley, Factorio and Undertale, and repairs a broken link with one click.
@@ -16,6 +16,13 @@
 </p>
 
 ---
+
+<details>
+<summary>Riddle answer</summary>
+
+Each game row probes the path that game reads the pad through, so green means the game can see the pad, not just macOS.
+
+</details>
 
 ## About
 
