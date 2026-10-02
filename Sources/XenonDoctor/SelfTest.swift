@@ -161,6 +161,15 @@ enum SelfTest {
         check("games: rows", Game.all.map { $0.link } == [.game, .factorio, .undertale])
         check("games: repairs resolve", Game.all.allSatisfy { Game.forRelaunch($0.relaunch) != nil && Game.forInstall($0.install) != nil })
         check("games: pinned", Game.all.allSatisfy { g in Pin.keys.contains { $0.0 == ["apps", g.steamAppID, "UseSteamControllerConfig"] && $0.1 == "0" } })
+        let idleFactorio = LinkState(.factorio, ok: false, detail: "set to keyboard and mouse input", repair: .enableFactorioPad)
+        let pad = LinkState(.pad, ok: true, detail: "connected")
+        let none = ChainSnapshot(links: [pad, LinkState(.game, ok: true, detail: "not running", idle: true), idleFactorio], takenAt: Date()).menuBar
+        check("menu bar: no game up, no game rows", none.links.map { $0.link } == [.pad] && none.worst == nil)
+        let one = ChainSnapshot(links: [pad, idleFactorio, LinkState(.undertale, ok: true, detail: "running", inPlay: true)], takenAt: Date()).menuBar
+        check("menu bar: only the game in play", one.links.map { $0.link } == [.pad, .undertale] && one.playing)
+        let two = ChainSnapshot(links: [pad, LinkState(.game, ok: true, detail: "running", inPlay: true),
+                                        LinkState(.undertale, ok: true, detail: "running", inPlay: true)], takenAt: Date()).menuBar
+        check("menu bar: two up, first in order wins", two.links.map { $0.link } == [.pad, .game])
         check("games: playing on any game", ChainSnapshot(links: [LinkState(.factorio, ok: true, detail: "running, reading the pad directly")], takenAt: Date()).playing)
 
         // Chain text: a broken link prints its button.

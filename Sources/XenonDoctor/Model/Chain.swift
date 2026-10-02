@@ -107,8 +107,11 @@ struct LinkState {
     /// Fine because nothing is happening (Steam or the game not running). Drawn as a
     /// faded green so a row that is merely dormant reads differently from one at work.
     let idle: Bool
+    /// A game row for a game that is up, or that Steam still thinks is up. Only such a
+    /// game gets a say in the menu bar.
+    let inPlay: Bool
 
-    init(_ link: Link, ok: Bool, detail: String, repair: RepairKind? = nil, hint: String? = nil, brief: String? = nil, idle: Bool = false) {
+    init(_ link: Link, ok: Bool, detail: String, repair: RepairKind? = nil, hint: String? = nil, brief: String? = nil, idle: Bool = false, inPlay: Bool = false) {
         self.link = link
         self.ok = ok
         self.detail = detail
@@ -116,6 +119,7 @@ struct LinkState {
         self.hint = hint
         self.brief = brief
         self.idle = idle
+        self.inPlay = inPlay
     }
 
     var severity: Severity {
@@ -162,6 +166,15 @@ struct ChainSnapshot {
         allOK && links.contains { $0.link.isGame && $0.detail.hasPrefix("running") }
     }
     static let playingLine = "Choppa da Wood (enjoy the game)"
+
+    /// What the menu bar shows: every row that is not a game, plus the one game in play.
+    /// Only one game is meant to run at a time; if two do, the first in `Game.all` wins,
+    /// so the pick never flickers between refreshes. With no game up, no game row shows,
+    /// and a closed game's setup warnings stay in the window.
+    var menuBar: ChainSnapshot {
+        let game = links.first { $0.link.isGame && $0.inPlay }?.link
+        return ChainSnapshot(links: links.filter { !$0.link.isGame || $0.link == game }, takenAt: takenAt)
+    }
 
     /// The row for one link, when the snapshot has it.
     func state(_ link: Link) -> LinkState? { links.first { $0.link == link } }
@@ -265,7 +278,7 @@ struct Chain {
 
     /// A previous answer carried forward while the current read is still running.
     static func stale(_ s: LinkState) -> LinkState {
-        LinkState(s.link, ok: s.ok, detail: s.detail + " (last reading)", repair: s.repair, hint: s.hint, brief: s.brief, idle: s.idle)
+        LinkState(s.link, ok: s.ok, detail: s.detail + " (last reading)", repair: s.repair, hint: s.hint, brief: s.brief, idle: s.idle, inPlay: s.inPlay)
     }
 
     /// A screenshot aid: the all-green, game-running picture without launching a game.
@@ -273,7 +286,7 @@ struct Chain {
         LinkState(.radio, ok: true, detail: "on"),
         LinkState(.pad, ok: true, detail: "SQUARE connected, battery 85%"),
         LinkState(.steam, ok: true, detail: "running, Steam Input off for the games"),
-        LinkState(.game, ok: true, detail: "running"),
+        LinkState(.game, ok: true, detail: "running", inPlay: true),
         LinkState(.factorio, ok: true, detail: "not running", idle: true),
         LinkState(.undertale, ok: true, detail: "not running", idle: true),
     ], takenAt: Date())

@@ -49,6 +49,12 @@ struct GameProbe: Probe {
     }
 
     func read() -> LinkState {
+        let s = reading()
+        let up = GameProbe.runningGame(game) != nil || GameProbe.steamThinksRunning(game)
+        return LinkState(s.link, ok: s.ok, detail: s.detail, repair: s.repair, hint: s.hint, brief: s.brief, idle: s.idle, inPlay: up)
+    }
+
+    private func reading() -> LinkState {
         if let app = GameProbe.runningGame(game) {
             if let broken = layerWhileRunning(app) { return broken }
             let launched = app.isFinishedLaunching && app.activationPolicy == .regular

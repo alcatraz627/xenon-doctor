@@ -52,8 +52,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     // MARK: glyph
 
-    private func paintGlyph(_ snap: ChainSnapshot?) {
+    private func paintGlyph(_ full: ChainSnapshot?) {
         guard let button = item.button else { return }
+        let snap = full?.menuBar
         let sev = snap?.severity ?? .fine
         let color: NSColor = snap == nil ? .secondaryLabelColor : sev.color
         let cfg = NSImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
@@ -124,12 +125,12 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private var menuSignature = ""
 
     private func rebuildMenu() {
-        let sig = signature(snapshot)
+        let sig = signature(snapshot?.menuBar)
         if menuOpen && sig == menuSignature { Trace.log("rebuild skipped, menu open, unchanged"); return }
         Trace.log("rebuild open=\(menuOpen) changed=\(sig != menuSignature)")
         menuSignature = sig
         menu.removeAllItems()
-        guard let snap = snapshot else {
+        guard let snap = snapshot?.menuBar else {
             let row = NSMenuItem(title: "Xenon Doctor   checking", action: nil, keyEquivalent: "")
             row.isEnabled = false
             menu.addItem(row)
